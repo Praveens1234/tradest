@@ -35,6 +35,9 @@ exports/
 # Temp files
 temp/
 
+# Runtime workspace (created on first start)
+workspace/
+
 # Node
 node_modules/
 npm-debug.log*
