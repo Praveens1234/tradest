@@ -75,11 +75,15 @@ async def compile_ea(
     if not ea_abs.exists():
         raise FileNotFoundError(f"EA file not found at: {ea_abs}")
 
+    errors: list[LogEntry] = []
+    warnings: list[LogEntry] = []
+    raw = ""
+    status = "error"
+
     if not settings.metaeditor_path:
-        raw = "MetaEditor path not configured. Skipping compilation."
-        errors, warnings = [], []
-        status = "error"
+        raw = "MetaEditor path not configured."
     else:
+        compile_failed = False
         try:
             subprocess.run(
                 [settings.metaeditor_path, f"/compile:{ea_abs}", "/log"],
@@ -88,23 +92,24 @@ async def compile_ea(
             )
         except subprocess.TimeoutExpired:
             logger.error("MetaEditor compilation timed out for EA #%d", ea_id)
+            compile_failed = True
         except FileNotFoundError:
             logger.error("MetaEditor not found at: %s", settings.metaeditor_path)
+            raw = f"MetaEditor executable not found: {settings.metaeditor_path}"
+            compile_failed = True
 
-        log_path = ea_abs.with_suffix(".log")
-        if log_path.exists():
-            raw = log_path.read_text(encoding="utf-16-le", errors="replace")
-        else:
-            raw = ""
+        if not compile_failed:
+            log_path = ea_abs.with_suffix(".log")
+            if log_path.exists():
+                raw = log_path.read_text(encoding="utf-16-le", errors="replace")
 
-        errors, warnings = _parse_log(raw)
-
-    if errors:
-        status = "error"
-    elif warnings:
-        status = "warning"
-    else:
-        status = "success"
+            errors, warnings = _parse_log(raw)
+            if errors:
+                status = "error"
+            elif warnings:
+                status = "warning"
+            else:
+                status = "success"
 
     if ws_queue:
         for entry in errors:

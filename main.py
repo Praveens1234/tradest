@@ -15,12 +15,10 @@ logger = logging.getLogger(__name__)
 
 def _generate_api_key() -> None:
     """Generate a new API key, hash it, and persist to .env."""
-    from passlib.context import CryptContext
-    from config import settings
+    import bcrypt
 
     raw_key = secrets.token_urlsafe(32)
-    ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-    hashed = ctx.hash(raw_key)
+    hashed = bcrypt.hashpw(raw_key.encode(), bcrypt.gensalt()).decode()
 
     env_path = pathlib.Path(".env")
     if env_path.exists():

@@ -1,13 +1,12 @@
 """Authentication endpoint."""
+import bcrypt
 from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException, status
 from jose import jwt
 from pydantic import BaseModel
-from passlib.context import CryptContext
 from config import settings
 
 router = APIRouter()
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 class LoginRequest(BaseModel):
@@ -24,7 +23,7 @@ async def login(req: LoginRequest) -> LoginResponse:
     if not settings.api_key_hash:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="API key not configured")
     try:
-        valid = pwd_context.verify(req.api_key, settings.api_key_hash)
+        valid = bcrypt.checkpw(req.api_key.encode(), settings.api_key_hash.encode())
     except Exception:
         valid = False
     if not valid:

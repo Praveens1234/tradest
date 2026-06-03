@@ -1,4 +1,5 @@
 """File system CRUD, copy, move, rename, delete, trash operations."""
+import json
 import os
 import shutil
 import pathlib
@@ -33,7 +34,7 @@ def write_file(path: str, content: str, override: bool = False, new_name: str = 
     if not override:
         conflict = check_conflict(str(target))
         if conflict:
-            raise FileExistsError(str(conflict.__dict__))
+            raise FileExistsError(json.dumps(conflict.__dict__))
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(content, encoding="utf-8")
     return str(target.relative_to(pathlib.Path(root).resolve())).replace("\\", "/")
@@ -53,7 +54,7 @@ def rename(path: str, new_name: str, override: bool = False) -> str:
     if not override:
         conflict = check_conflict(str(dest))
         if conflict:
-            raise FileExistsError(str(conflict.__dict__))
+            raise FileExistsError(json.dumps(conflict.__dict__))
     target.rename(dest)
     root_p = pathlib.Path(root).resolve()
     return str(dest.relative_to(root_p)).replace("\\", "/")
@@ -66,7 +67,7 @@ def copy(source: str, destination: str, override: bool = False) -> str:
     if not override:
         conflict = check_conflict(str(dst))
         if conflict:
-            raise FileExistsError(str(conflict.__dict__))
+            raise FileExistsError(json.dumps(conflict.__dict__))
     dst.parent.mkdir(parents=True, exist_ok=True)
     if src.is_dir():
         shutil.copytree(str(src), str(dst), dirs_exist_ok=override)
@@ -83,7 +84,7 @@ def move(source: str, destination: str, override: bool = False) -> str:
     if not override and dst.exists():
         conflict = check_conflict(str(dst))
         if conflict:
-            raise FileExistsError(str(conflict.__dict__))
+            raise FileExistsError(json.dumps(conflict.__dict__))
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(src), str(dst))
     root_p = pathlib.Path(root).resolve()

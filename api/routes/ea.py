@@ -1,6 +1,5 @@
 """EA CRUD, upload, and compile endpoints."""
 import json
-import asyncio
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession

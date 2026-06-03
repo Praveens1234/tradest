@@ -1,9 +1,16 @@
 """MCP Server — all tools wired to the Core Service Layer via stdio transport."""
+import sys
 import json
 import base64
 import asyncio
 import pathlib
 import logging
+
+# Ensure project root is on sys.path when run as a script
+_ROOT = pathlib.Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 from mcp.server.fastmcp import FastMCP
 from db.database import AsyncSessionLocal, init_db
 from core.cli_automation.ini_generator import BacktestParams
@@ -22,13 +29,12 @@ async def _get_db():
 @mcp.tool()
 async def auth_check(api_key: str) -> dict:
     """Validate API key and confirm server connectivity."""
-    from passlib.context import CryptContext
+    import bcrypt
     from config import settings
-    ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
     if not settings.api_key_hash:
         return {"valid": False, "error": "API key not configured"}
     try:
-        valid = ctx.verify(api_key, settings.api_key_hash)
+        valid = bcrypt.checkpw(api_key.encode(), settings.api_key_hash.encode())
     except Exception:
         valid = False
     return {"valid": valid}
@@ -427,4 +433,5 @@ async def usage_log(limit: int = 50, action: str | None = None) -> list:
 
 if __name__ == "__main__":
     asyncio.run(init_db())
+    mcp.run(transport="stdio")
     mcp.run(transport="stdio")

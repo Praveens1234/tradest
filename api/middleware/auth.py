@@ -1,17 +1,15 @@
 """Auth middleware: validates both Bearer JWT and X-API-Key headers."""
+import bcrypt
 from fastapi import Header, Depends, HTTPException, status
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from config import settings
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def _verify_api_key(raw_key: str) -> bool:
     if not settings.api_key_hash:
         return False
     try:
-        return pwd_context.verify(raw_key, settings.api_key_hash)
+        return bcrypt.checkpw(raw_key.encode(), settings.api_key_hash.encode())
     except Exception:
         return False
 

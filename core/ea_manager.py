@@ -15,11 +15,11 @@ logger = logging.getLogger(__name__)
 EXPERTS_SUBDIR = "Experts"
 
 
-def _experts_dir() -> str:
+def _ensure_experts_dir() -> pathlib.Path:
     root = settings.mql5_root or settings.workspace_dir or "workspace"
     experts = pathlib.Path(root) / EXPERTS_SUBDIR
     experts.mkdir(parents=True, exist_ok=True)
-    return str(pathlib.Path(root).name + "/" + EXPERTS_SUBDIR)
+    return experts
 
 
 async def create_ea(

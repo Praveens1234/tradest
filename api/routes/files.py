@@ -1,7 +1,6 @@
 """File Manager endpoints: tree, CRUD, upload, copy, move, delete, download."""
 import json
 import pathlib
-from dataclasses import asdict
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
@@ -113,7 +112,10 @@ async def write_file(req: WriteRequest):
         saved_path = fs_operations.write_file(req.path, req.content, req.override, req.new_name)
         return {"path": saved_path}
     except FileExistsError as exc:
-        conflict_data = json.loads(str(exc).replace("'", '"'))
+        try:
+            conflict_data = json.loads(str(exc))
+        except Exception:
+            conflict_data = str(exc)
         raise HTTPException(status_code=409, detail=conflict_data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -10,7 +10,9 @@ def _safe_resolve(path: str, root: str) -> pathlib.Path:
     """Resolve path under root; raise ValueError on traversal attempt."""
     root_p = pathlib.Path(root).resolve()
     resolved = (root_p / path).resolve()
-    if not str(resolved).startswith(str(root_p)):
+    try:
+        resolved.relative_to(root_p)
+    except ValueError:
         raise ValueError(f"Path traversal attempt: {path!r}")
     return resolved
 

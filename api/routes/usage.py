@@ -1,12 +1,10 @@
 """Usage log and health endpoints."""
-import os
 import pathlib
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.database import get_db
 from api.middleware.auth import require_auth
 from core import usage_store
-from core.setup.mt5_detector import detect
 from config import settings
 import psutil
 

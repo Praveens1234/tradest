@@ -2,7 +2,6 @@
 import asyncio
 import pathlib
 import logging
-from typing import Callable, Awaitable
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
@@ -14,26 +13,40 @@ class _ReportHandler(FileSystemEventHandler):
         self._run_dir = run_dir
         self._loop = loop
         self._queue = queue
-        self._found_html = False
-        self._found_xml = False
+        self._html_path: str | None = None
+        self._xml_path: str | None = None
+        self._notified = False
 
-    def on_created(self, event):
+    def _check_and_notify(self):
+        if self._notified:
+            return
+        if self._html_path and self._xml_path:
+            self._notified = True
+            self._loop.call_soon_threadsafe(
+                self._queue.put_nowait,
+                {"html": self._html_path, "xml": self._xml_path},
+            )
+
+    def on_closed(self, event):
         if event.is_directory:
             return
         p = pathlib.Path(event.src_path)
         if p.suffix.lower() == ".html":
-            self._found_html = True
+            self._html_path = str(p)
         elif p.suffix.lower() == ".xml":
-            self._found_xml = True
+            self._xml_path = str(p)
+        self._check_and_notify()
 
-        if self._found_html and self._found_xml:
-            self._loop.call_soon_threadsafe(
-                self._queue.put_nowait,
-                {"html": str(p.parent / "report.html"), "xml": str(p.parent / "report.xml")},
-            )
-
-    def on_modified(self, event):
-        self.on_created(event)
+    def on_created(self, event):
+        # Fallback for platforms that don't emit on_closed
+        if event.is_directory:
+            return
+        p = pathlib.Path(event.src_path)
+        if p.suffix.lower() == ".html" and not self._html_path:
+            self._html_path = str(p)
+        elif p.suffix.lower() == ".xml" and not self._xml_path:
+            self._xml_path = str(p)
+        self._check_and_notify()
 
 
 async def watch_exports(run_id: int, exports_dir: str, timeout: int = 3600) -> dict | None:
@@ -42,10 +55,10 @@ async def watch_exports(run_id: int, exports_dir: str, timeout: int = 3600) -> d
     run_dir.mkdir(parents=True, exist_ok=True)
 
     # Check if files already exist (race condition guard)
-    html_path = run_dir / "report.html"
-    xml_path = run_dir / "report.xml"
-    if html_path.exists() and xml_path.exists():
-        return {"html": str(html_path), "xml": str(xml_path)}
+    existing_html = next(run_dir.glob("*.html"), None)
+    existing_xml = next(run_dir.glob("*.xml"), None)
+    if existing_html and existing_xml:
+        return {"html": str(existing_html), "xml": str(existing_xml)}
 
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue = asyncio.Queue()
