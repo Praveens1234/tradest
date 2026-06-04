@@ -156,6 +156,13 @@ class _AppDrawer extends ConsumerWidget {
                   route: '/usage',
                   currentRoute: currentRoute,
                 ),
+                _DrawerItem(
+                  icon: Icons.terminal_outlined,
+                  activeIcon: Icons.terminal,
+                  label: 'Platform Logs',
+                  route: '/logs',
+                  currentRoute: currentRoute,
+                ),
                 Divider(
                   color: cs.outlineVariant,
                   indent: 16,

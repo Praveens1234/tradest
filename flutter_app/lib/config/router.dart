@@ -12,6 +12,7 @@ import '../features/backtest/results_screen.dart';
 import '../features/history/history_screen.dart';
 import '../features/trade_ledger/trade_ledger_screen.dart';
 import '../features/usage/usage_log_screen.dart';
+import '../features/logs/logs_screen.dart';
 import '../features/settings/settings_screen.dart';
 import '../features/files/file_browser_screen.dart';
 
@@ -90,6 +91,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/usage',
         builder: (context, state) => const UsageLogScreen(),
+      ),
+      GoRoute(
+        path: '/logs',
+        builder: (context, state) => const LogsScreen(),
       ),
       GoRoute(
         path: '/settings',

@@ -94,9 +94,11 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
             final mem = (resources?['memory_mb'] as num?)?.toDouble();
 
             // Build a meaningful log entry
+            final errorMsg = json['error']?.toString();
             final logParts = <String>['Status: ${update.status}'];
             if (elapsedS != null) logParts.add('${elapsedS}s elapsed');
             if (cpu != null) logParts.add('CPU ${cpu.toStringAsFixed(1)}%');
+            if (errorMsg != null) logParts.add('Error: $errorMsg');
 
             setState(() {
               _run = update;
@@ -286,8 +288,7 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
                         Expanded(
                           child: _ResourceMini(
                             label: 'RAM',
-                            value:
-                                '${(_memoryMb! / 1024).toStringAsFixed(1)} GB',
+                            value: '${_memoryMb!.toStringAsFixed(0)} MB',
                             icon: Icons.storage,
                             color: cs.secondary,
                           ),

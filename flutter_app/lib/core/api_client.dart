@@ -64,7 +64,21 @@ class ApiClient {
     if (e is DioException) {
       final detail = e.response?.data?['detail'];
       if (detail is String) return detail;
-      if (detail is Map) return detail['msg']?.toString() ?? detail.toString();
+      if (detail is Map) {
+        // Handle 409 ConflictInfo object
+        if (detail['conflict'] == true) {
+          final suggested = detail['suggested_name'];
+          if (suggested != null) {
+            return 'File already exists. Suggested name: $suggested';
+          }
+          return 'File already exists';
+        }
+        return detail['msg']?.toString() ?? detail['message']?.toString() ?? detail.toString();
+      }
+      if (detail is List && detail.isNotEmpty) {
+        final first = detail.first;
+        if (first is Map) return first['msg']?.toString() ?? first.toString();
+      }
       return e.message ?? e.toString();
     }
     return e.toString().replaceFirst('Exception: ', '');
