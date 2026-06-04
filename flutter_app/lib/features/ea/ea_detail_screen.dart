@@ -333,15 +333,15 @@ class _CompileResultSheet extends StatelessWidget {
                 ),
               ],
               if (result.success && result.errors.isEmpty && result.warnings.isEmpty)
-                Center(
+                const Center(
                   child: Padding(
-                    padding: const EdgeInsets.all(32),
+                    padding: EdgeInsets.all(32),
                     child: Column(
                       children: [
-                        const Icon(Icons.check_circle_outline,
+                        Icon(Icons.check_circle_outline,
                             color: AppColors.success, size: 48),
-                        const SizedBox(height: 8),
-                        const Text('Compiled successfully',
+                        SizedBox(height: 8),
+                        Text('Compiled successfully',
                             style: TextStyle(color: AppColors.success)),
                       ],
                     ),

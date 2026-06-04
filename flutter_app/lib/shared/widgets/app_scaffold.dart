@@ -24,7 +24,7 @@ class AppScaffold extends ConsumerWidget {
         title: Text(title),
         actions: actions,
       ),
-      drawer: _AppDrawer(),
+      drawer: const _AppDrawer(),
       body: body,
       floatingActionButton: floatingActionButton,
     );

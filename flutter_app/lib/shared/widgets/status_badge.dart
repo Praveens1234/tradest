@@ -76,10 +76,10 @@ class StatusBadge extends StatelessWidget {
         );
       case 'pending':
       default:
-        return _BadgeConfig(
-          backgroundColor: const Color(0xFF374151),
-          dotColor: const Color(0xFF9CA3AF),
-          textColor: const Color(0xFFD1D5DB),
+        return const _BadgeConfig(
+          backgroundColor: Color(0xFF374151),
+          dotColor: Color(0xFF9CA3AF),
+          textColor: Color(0xFFD1D5DB),
         );
     }
   }
