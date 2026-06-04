@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import '../../core/storage_service.dart';
-import '../../core/api_client.dart';
 
 class AuthNotifier extends StateNotifier<AsyncValue<String?>> {
   AuthNotifier() : super(const AsyncValue.loading()) {
