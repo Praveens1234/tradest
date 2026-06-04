@@ -117,7 +117,7 @@ class EAOperationsNotifier extends StateNotifier<EAOperationsState> {
   Future<void> createEA({
     required String name,
     required String content,
-    String type = 'EA',
+    String type = 'mq5',
   }) async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {

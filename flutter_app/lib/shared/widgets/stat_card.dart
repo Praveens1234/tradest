@@ -20,9 +20,12 @@ class StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1F2937),
+        color: cs.surfaceContainerHigh,
         borderRadius: BorderRadius.circular(12),
       ),
       padding: const EdgeInsets.all(16),
@@ -35,11 +38,7 @@ class StatCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF9CA3AF),
-                    fontWeight: FontWeight.w500,
-                  ),
+                  style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant),
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
@@ -47,17 +46,16 @@ class StatCard extends StatelessWidget {
                 Icon(
                   icon,
                   size: 16,
-                  color: iconColor ?? const Color(0xFF6B7280),
+                  color: iconColor ?? cs.onSurfaceVariant,
                 ),
             ],
           ),
           const SizedBox(height: 8),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 22,
+            style: tt.titleLarge?.copyWith(
               fontWeight: FontWeight.bold,
-              color: valueColor ?? Colors.white,
+              color: valueColor ?? cs.onSurface,
             ),
             overflow: TextOverflow.ellipsis,
           ),
@@ -65,10 +63,7 @@ class StatCard extends StatelessWidget {
             const SizedBox(height: 4),
             Text(
               subtitle!,
-              style: const TextStyle(
-                fontSize: 12,
-                color: Color(0xFF6B7280),
-              ),
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
               overflow: TextOverflow.ellipsis,
             ),
           ],

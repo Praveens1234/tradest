@@ -24,7 +24,7 @@ class AppScaffold extends ConsumerWidget {
         title: Text(title),
         actions: actions,
       ),
-      drawer: _AppDrawer(currentTitle: title),
+      drawer: _AppDrawer(),
       body: body,
       floatingActionButton: floatingActionButton,
     );
@@ -32,50 +32,66 @@ class AppScaffold extends ConsumerWidget {
 }
 
 class _AppDrawer extends ConsumerWidget {
-  final String currentTitle;
-
-  const _AppDrawer({required this.currentTitle});
+  const _AppDrawer();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final cs = Theme.of(context).colorScheme;
+    final currentRoute = GoRouterState.of(context).matchedLocation;
+
     return Drawer(
+      backgroundColor: cs.surfaceContainer,
       child: Column(
         children: [
           Container(
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(20, 56, 20, 20),
-            color: const Color(0xFF111827),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  cs.primaryContainer,
+                  cs.surfaceContainer,
+                ],
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 52,
+                  height: 52,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF3B82F6),
-                    borderRadius: BorderRadius.circular(12),
+                    color: cs.primary,
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: cs.primary.withAlpha(80),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.candlestick_chart,
-                    color: Colors.white,
-                    size: 28,
+                    color: cs.onPrimary,
+                    size: 30,
                   ),
                 ),
-                const SizedBox(height: 12),
-                const Text(
+                const SizedBox(height: 14),
+                Text(
                   'MT5 EA Platform',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.bold,
+                      ),
                 ),
-                const Text(
+                Text(
                   'Automation Dashboard',
-                  style: TextStyle(
-                    color: Color(0xFF9CA3AF),
-                    fontSize: 13,
-                  ),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onPrimaryContainer.withAlpha(180),
+                      ),
                 ),
               ],
             ),
@@ -86,80 +102,89 @@ class _AppDrawer extends ConsumerWidget {
               children: [
                 _DrawerItem(
                   icon: Icons.dashboard_outlined,
+                  activeIcon: Icons.dashboard,
                   label: 'Dashboard',
                   route: '/dashboard',
-                  currentTitle: currentTitle,
+                  currentRoute: currentRoute,
                 ),
                 _DrawerItem(
                   icon: Icons.code_outlined,
+                  activeIcon: Icons.code,
                   label: 'EA Manager',
                   route: '/ea',
-                  currentTitle: currentTitle,
+                  currentRoute: currentRoute,
                 ),
                 _DrawerItem(
                   icon: Icons.play_circle_outlined,
+                  activeIcon: Icons.play_circle,
                   label: 'Backtest',
                   route: '/backtest/setup',
-                  currentTitle: currentTitle,
-                ),
-                _DrawerItem(
-                  icon: Icons.bar_chart_outlined,
-                  label: 'Results',
-                  route: '/results',
-                  currentTitle: currentTitle,
+                  currentRoute: currentRoute,
                 ),
                 _DrawerItem(
                   icon: Icons.history_outlined,
+                  activeIcon: Icons.history,
                   label: 'History',
                   route: '/history',
-                  currentTitle: currentTitle,
+                  currentRoute: currentRoute,
+                ),
+                _DrawerItem(
+                  icon: Icons.folder_outlined,
+                  activeIcon: Icons.folder,
+                  label: 'Files',
+                  route: '/files',
+                  currentRoute: currentRoute,
+                ),
+                _DrawerItem(
+                  icon: Icons.bar_chart_outlined,
+                  activeIcon: Icons.bar_chart,
+                  label: 'Results',
+                  route: '/results',
+                  currentRoute: currentRoute,
                 ),
                 _DrawerItem(
                   icon: Icons.receipt_long_outlined,
+                  activeIcon: Icons.receipt_long,
                   label: 'Trade Ledger',
                   route: '/ledger',
-                  currentTitle: currentTitle,
+                  currentRoute: currentRoute,
                 ),
                 _DrawerItem(
                   icon: Icons.list_alt_outlined,
+                  activeIcon: Icons.list_alt,
                   label: 'Usage Log',
                   route: '/usage',
-                  currentTitle: currentTitle,
+                  currentRoute: currentRoute,
                 ),
-                const Divider(
-                  color: Color(0xFF374151),
+                Divider(
+                  color: cs.outlineVariant,
                   indent: 16,
                   endIndent: 16,
                 ),
                 _DrawerItem(
                   icon: Icons.settings_outlined,
+                  activeIcon: Icons.settings,
                   label: 'Settings',
                   route: '/settings',
-                  currentTitle: currentTitle,
+                  currentRoute: currentRoute,
                 ),
                 ListTile(
-                  leading: const Icon(
-                    Icons.logout,
-                    color: Color(0xFFEF4444),
-                    size: 22,
-                  ),
-                  title: const Text(
+                  leading: Icon(Icons.logout, color: cs.error, size: 22),
+                  title: Text(
                     'Logout',
-                    style: TextStyle(
-                      color: Color(0xFFEF4444),
-                      fontSize: 15,
-                    ),
+                    style: TextStyle(color: cs.error, fontSize: 15),
                   ),
                   onTap: () async {
                     Navigator.of(context).pop();
                     await ref.read(authProvider.notifier).logout();
-                    if (context.mounted) {
-                      context.go('/login');
-                    }
+                    if (context.mounted) context.go('/login');
                   },
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 20,
                     vertical: 2,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
               ],
@@ -173,46 +198,52 @@ class _AppDrawer extends ConsumerWidget {
 
 class _DrawerItem extends StatelessWidget {
   final IconData icon;
+  final IconData activeIcon;
   final String label;
   final String route;
-  final String currentTitle;
+  final String currentRoute;
 
   const _DrawerItem({
     required this.icon,
+    required this.activeIcon,
     required this.label,
     required this.route,
-    required this.currentTitle,
+    required this.currentRoute,
   });
+
+  bool get _isActive {
+    if (route == '/dashboard') return currentRoute == '/dashboard' || currentRoute == '/';
+    return currentRoute.startsWith(route);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isActive = currentTitle == label;
+    final cs = Theme.of(context).colorScheme;
+    final isActive = _isActive;
 
-    return ListTile(
-      leading: Icon(
-        icon,
-        color: isActive ? const Color(0xFF3B82F6) : const Color(0xFF9CA3AF),
-        size: 22,
-      ),
-      title: Text(
-        label,
-        style: TextStyle(
-          color: isActive ? const Color(0xFF3B82F6) : Colors.white,
-          fontSize: 15,
-          fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 1),
+      child: ListTile(
+        leading: Icon(
+          isActive ? activeIcon : icon,
+          color: isActive ? cs.onPrimaryContainer : cs.onSurfaceVariant,
+          size: 22,
         ),
-      ),
-      tileColor: isActive ? const Color(0xFF3B82F6).withAlpha(26) : null,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      onTap: () {
-        Navigator.of(context).pop();
-        context.go(route);
-      },
-      contentPadding: const EdgeInsets.symmetric(
-        horizontal: 20,
-        vertical: 2,
+        title: Text(
+          label,
+          style: TextStyle(
+            color: isActive ? cs.onPrimaryContainer : cs.onSurface,
+            fontSize: 15,
+            fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
+          ),
+        ),
+        tileColor: isActive ? cs.primaryContainer : null,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        onTap: () {
+          Navigator.of(context).pop();
+          context.go(route);
+        },
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
       ),
     );
   }

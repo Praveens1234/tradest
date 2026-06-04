@@ -12,99 +12,116 @@ class MT5App extends ConsumerWidget {
     return MaterialApp.router(
       title: 'MT5 EA Platform',
       debugShowCheckedModeBanner: false,
-      theme: _buildDarkTheme(),
+      theme: _buildTheme(),
       routerConfig: router,
     );
   }
 
-  ThemeData _buildDarkTheme() {
-    const backgroundColor = Color(0xFF030712);
-    const surfaceColor = Color(0xFF111827);
-    const cardColor = Color(0xFF1F2937);
-    const primaryBlue = Color(0xFF3B82F6);
+  ThemeData _buildTheme() {
+    const seed = Color(0xFF3B82F6);
+    final cs = ColorScheme.fromSeed(
+      seedColor: seed,
+      brightness: Brightness.dark,
+    );
 
     return ThemeData(
       useMaterial3: true,
-      brightness: Brightness.dark,
-      colorScheme: const ColorScheme.dark(
-        primary: primaryBlue,
-        secondary: primaryBlue,
-        surface: surfaceColor,
-        surfaceContainer: cardColor,
-        onPrimary: Colors.white,
-        onSecondary: Colors.white,
-        onSurface: Colors.white,
-        error: Color(0xFFEF4444),
-        onError: Colors.white,
-      ),
-      scaffoldBackgroundColor: backgroundColor,
-      cardColor: cardColor,
+      colorScheme: cs,
+      scaffoldBackgroundColor: cs.surface,
       cardTheme: CardTheme(
-        color: cardColor,
+        color: cs.surfaceContainerHigh,
         elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
-      appBarTheme: const AppBarTheme(
-        backgroundColor: surfaceColor,
-        foregroundColor: Colors.white,
+      appBarTheme: AppBarTheme(
+        backgroundColor: cs.surfaceContainer,
+        foregroundColor: cs.onSurface,
         elevation: 0,
         centerTitle: false,
         titleTextStyle: TextStyle(
-          color: Colors.white,
+          color: cs.onSurface,
           fontSize: 20,
           fontWeight: FontWeight.w600,
         ),
+        iconTheme: IconThemeData(color: cs.onSurface),
       ),
-      drawerTheme: const DrawerThemeData(
-        backgroundColor: surfaceColor,
-      ),
-      navigationDrawerTheme: const NavigationDrawerThemeData(
-        backgroundColor: surfaceColor,
-        indicatorColor: primaryBlue,
+      drawerTheme: DrawerThemeData(backgroundColor: cs.surfaceContainer),
+      navigationDrawerTheme: NavigationDrawerThemeData(
+        backgroundColor: cs.surfaceContainer,
+        indicatorColor: cs.primaryContainer,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: cardColor,
+        fillColor: cs.surfaceContainerHighest,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF374151)),
+          borderSide: BorderSide(color: cs.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF374151)),
+          borderSide: BorderSide(color: cs.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: primaryBlue, width: 2),
+          borderSide: BorderSide(color: cs.primary, width: 2),
         ),
-        labelStyle: const TextStyle(color: Color(0xFF9CA3AF)),
-        hintStyle: const TextStyle(color: Color(0xFF6B7280)),
+        labelStyle: TextStyle(color: cs.onSurfaceVariant),
+        hintStyle: TextStyle(color: cs.onSurfaceVariant.withAlpha(150)),
       ),
-      elevatedButtonTheme: ElevatedButtonThemeData(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: primaryBlue,
-          foregroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         ),
       ),
-      textButtonTheme: TextButtonThemeData(
-        style: TextButton.styleFrom(
-          foregroundColor: primaryBlue,
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: cs.primary,
+          foregroundColor: cs.onPrimary,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
         ),
       ),
-      dividerColor: const Color(0xFF374151),
-      snackBarTheme: SnackBarThemeData(
-        backgroundColor: cardColor,
-        contentTextStyle: const TextStyle(color: Colors.white),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          side: BorderSide(color: cs.outline),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: cs.primary),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: cs.primaryContainer,
+        foregroundColor: cs.onPrimaryContainer,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        backgroundColor: cs.inverseSurface,
+        contentTextStyle: TextStyle(color: cs.onInverseSurface),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         behavior: SnackBarBehavior.floating,
+      ),
+      dividerTheme: DividerThemeData(color: cs.outlineVariant),
+      chipTheme: ChipThemeData(
+        side: BorderSide(color: cs.outlineVariant),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      textTheme: const TextTheme(
+        displayLarge: TextStyle(fontSize: 57, fontWeight: FontWeight.w400),
+        displayMedium: TextStyle(fontSize: 45, fontWeight: FontWeight.w400),
+        displaySmall: TextStyle(fontSize: 36, fontWeight: FontWeight.w400),
+        headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.w600),
+        headlineMedium: TextStyle(fontSize: 28, fontWeight: FontWeight.w600),
+        headlineSmall: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+        titleLarge: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+        titleMedium: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+        titleSmall: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w400),
+        bodyMedium: TextStyle(fontSize: 14, fontWeight: FontWeight.w400),
+        bodySmall: TextStyle(fontSize: 12, fontWeight: FontWeight.w400),
+        labelLarge: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        labelMedium: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+        labelSmall: TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
       ),
     );
   }

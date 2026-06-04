@@ -53,51 +53,45 @@ class ApiClient {
     _onUnauthorized = callback;
   }
 
-  Future<Response<T>> get<T>(
-    String path, {
-    Map<String, dynamic>? params,
-  }) async {
-    final baseUrl = await StorageService.instance.getServerUrl();
-    return _dio.get<T>(
-      path,
-      queryParameters: params,
-      options: Options(extra: {'baseUrl': baseUrl}),
-    );
+  /// Build a WebSocket URL by swapping http(s) scheme to ws(s).
+  static Future<String> buildWsUrl(String path) async {
+    final base = await StorageService.instance.getServerUrl();
+    return base.replaceFirst(RegExp(r'^http'), 'ws') + path;
   }
 
-  Future<Response<T>> post<T>(
-    String path, {
-    dynamic data,
-  }) async {
-    final baseUrl = await StorageService.instance.getServerUrl();
-    return _dio.post<T>(
-      path,
-      data: data,
-      options: Options(extra: {'baseUrl': baseUrl}),
-    );
+  /// Extract a human-readable error message from DioException or other errors.
+  static String extractError(Object e) {
+    if (e is DioException) {
+      final detail = e.response?.data?['detail'];
+      if (detail is String) return detail;
+      if (detail is Map) return detail['msg']?.toString() ?? detail.toString();
+      return e.message ?? e.toString();
+    }
+    return e.toString().replaceFirst('Exception: ', '');
   }
 
-  Future<Response<T>> put<T>(
-    String path, {
-    dynamic data,
-  }) async {
-    final baseUrl = await StorageService.instance.getServerUrl();
-    return _dio.put<T>(
-      path,
-      data: data,
-      options: Options(extra: {'baseUrl': baseUrl}),
-    );
+  Future<Response<T>> get<T>(String path, {Map<String, dynamic>? params}) {
+    return _dio.get<T>(path, queryParameters: params);
   }
 
-  Future<Response<T>> delete<T>(
-    String path, {
-    dynamic data,
-  }) async {
-    final baseUrl = await StorageService.instance.getServerUrl();
-    return _dio.delete<T>(
+  Future<Response<T>> post<T>(String path, {dynamic data}) {
+    return _dio.post<T>(path, data: data);
+  }
+
+  Future<Response<T>> put<T>(String path, {dynamic data}) {
+    return _dio.put<T>(path, data: data);
+  }
+
+  Future<Response<T>> delete<T>(String path, {dynamic data}) {
+    return _dio.delete<T>(path, data: data);
+  }
+
+  /// Download bytes — used for report downloads.
+  Future<List<int>> getBytes(String path) async {
+    final response = await _dio.get<List<int>>(
       path,
-      data: data,
-      options: Options(extra: {'baseUrl': baseUrl}),
+      options: Options(responseType: ResponseType.bytes),
     );
+    return response.data ?? [];
   }
 }

@@ -13,6 +13,7 @@ import '../features/history/history_screen.dart';
 import '../features/trade_ledger/trade_ledger_screen.dart';
 import '../features/usage/usage_log_screen.dart';
 import '../features/settings/settings_screen.dart';
+import '../features/files/file_browser_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
@@ -26,12 +27,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final isAuthenticated = authState.valueOrNull != null;
       final isLoginRoute = state.matchedLocation == '/login';
 
-      if (!isAuthenticated && !isLoginRoute) {
-        return '/login';
-      }
-      if (isAuthenticated && isLoginRoute) {
-        return '/dashboard';
-      }
+      if (!isAuthenticated && !isLoginRoute) return '/login';
+      if (isAuthenticated && isLoginRoute) return '/dashboard';
       return null;
     },
     routes: [
@@ -65,7 +62,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/backtest/monitor/:runId',
         builder: (context, state) {
-          final runId = int.tryParse(state.pathParameters['runId'] ?? '') ?? 0;
+          final runId =
+              int.tryParse(state.pathParameters['runId'] ?? '') ?? 0;
           return BacktestMonitorScreen(runId: runId);
         },
       ),
@@ -96,6 +94,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/files',
+        builder: (context, state) => const FileBrowserScreen(),
       ),
     ],
   );

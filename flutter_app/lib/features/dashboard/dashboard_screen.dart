@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api_client.dart';
+import '../../core/app_colors.dart';
 import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/stat_card.dart';
 import '../../shared/widgets/status_badge.dart';
+import '../../shared/widgets/shimmer_loading.dart';
 import '../../shared/models/backtest_model.dart';
 
 final _healthProvider = FutureProvider.autoDispose<Map<String, dynamic>>((ref) async {
@@ -30,9 +32,21 @@ class DashboardScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final healthAsync = ref.watch(_healthProvider);
     final recentRunsAsync = ref.watch(_recentRunsProvider);
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
 
     return AppScaffold(
       title: 'Dashboard',
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh_outlined),
+          tooltip: 'Refresh',
+          onPressed: () {
+            ref.invalidate(_healthProvider);
+            ref.invalidate(_recentRunsProvider);
+          },
+        ),
+      ],
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(_healthProvider);
@@ -41,33 +55,51 @@ class DashboardScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _buildSectionHeader('System Health'),
+            Text(
+              'SYSTEM HEALTH',
+              style: tt.labelSmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
+            ),
             const SizedBox(height: 12),
             healthAsync.when(
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
-                ),
+              loading: () => const Column(
+                children: [
+                  Row(children: [
+                    Expanded(child: ShimmerStatCard()),
+                    SizedBox(width: 12),
+                    Expanded(child: ShimmerStatCard()),
+                  ]),
+                  SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(child: ShimmerStatCard()),
+                    SizedBox(width: 12),
+                    Expanded(child: ShimmerStatCard()),
+                    SizedBox(width: 12),
+                    Expanded(child: ShimmerStatCard()),
+                  ]),
+                ],
               ),
               error: (err, _) => _ErrorCard(
-                message: err.toString().replaceFirst('Exception: ', ''),
+                message: ApiClient.extractError(err),
                 onRetry: () => ref.invalidate(_healthProvider),
               ),
               data: (health) => _HealthSection(health: health),
             ),
-            const SizedBox(height: 24),
-            _buildSectionHeader('Recent Backtests'),
+            const SizedBox(height: 28),
+            Text(
+              'RECENT BACKTESTS',
+              style: tt.labelSmall?.copyWith(
+                color: cs.onSurfaceVariant,
+                letterSpacing: 1.2,
+              ),
+            ),
             const SizedBox(height: 12),
             recentRunsAsync.when(
-              loading: () => const Center(
-                child: Padding(
-                  padding: EdgeInsets.all(32),
-                  child: CircularProgressIndicator(),
-                ),
-              ),
+              loading: () => const ShimmerList(count: 4),
               error: (err, _) => _ErrorCard(
-                message: err.toString().replaceFirst('Exception: ', ''),
+                message: ApiClient.extractError(err),
                 onRetry: () => ref.invalidate(_recentRunsProvider),
               ),
               data: (runs) => _RecentRunsList(runs: runs),
@@ -77,23 +109,10 @@ class DashboardScreen extends ConsumerWidget {
       ),
     );
   }
-
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: const TextStyle(
-        fontSize: 16,
-        fontWeight: FontWeight.w600,
-        color: Color(0xFF9CA3AF),
-        letterSpacing: 0.5,
-      ),
-    );
-  }
 }
 
 class _HealthSection extends StatelessWidget {
   final Map<String, dynamic> health;
-
   const _HealthSection({required this.health});
 
   @override
@@ -101,11 +120,8 @@ class _HealthSection extends StatelessWidget {
     final terminalOk = health['terminal_ok'] as bool? ?? false;
     final metaeditorOk = health['metaeditor_ok'] as bool? ?? false;
     final mql5Ok = health['mql5_ok'] as bool? ?? false;
-    final cpu = health['cpu_percent'];
-    final mem = health['memory_mb'];
-
-    final cpuStr = cpu != null ? '${cpu.toStringAsFixed(1)}%' : 'N/A';
-    final memStr = mem != null ? '${(mem as num).toStringAsFixed(0)} MB' : 'N/A';
+    final cpu = health['cpu_percent'] as num? ?? 0;
+    final mem = health['memory_mb'] as num? ?? 0;
 
     return Column(
       children: [
@@ -115,13 +131,9 @@ class _HealthSection extends StatelessWidget {
               child: StatCard(
                 label: 'Terminal',
                 value: terminalOk ? 'OK' : 'DOWN',
-                valueColor: terminalOk
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFEF4444),
+                valueColor: terminalOk ? AppColors.success : Theme.of(context).colorScheme.error,
                 icon: terminalOk ? Icons.check_circle : Icons.error,
-                iconColor: terminalOk
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFEF4444),
+                iconColor: terminalOk ? AppColors.success : Theme.of(context).colorScheme.error,
               ),
             ),
             const SizedBox(width: 12),
@@ -129,13 +141,9 @@ class _HealthSection extends StatelessWidget {
               child: StatCard(
                 label: 'MetaEditor',
                 value: metaeditorOk ? 'OK' : 'DOWN',
-                valueColor: metaeditorOk
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFEF4444),
+                valueColor: metaeditorOk ? AppColors.success : Theme.of(context).colorScheme.error,
                 icon: metaeditorOk ? Icons.check_circle : Icons.error,
-                iconColor: metaeditorOk
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFEF4444),
+                iconColor: metaeditorOk ? AppColors.success : Theme.of(context).colorScheme.error,
               ),
             ),
           ],
@@ -147,30 +155,14 @@ class _HealthSection extends StatelessWidget {
               child: StatCard(
                 label: 'MQL5',
                 value: mql5Ok ? 'OK' : 'DOWN',
-                valueColor: mql5Ok
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFEF4444),
+                valueColor: mql5Ok ? AppColors.success : Theme.of(context).colorScheme.error,
                 icon: mql5Ok ? Icons.check_circle : Icons.error,
-                iconColor: mql5Ok
-                    ? const Color(0xFF22C55E)
-                    : const Color(0xFFEF4444),
+                iconColor: mql5Ok ? AppColors.success : Theme.of(context).colorScheme.error,
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: StatCard(
-                label: 'CPU Usage',
-                value: cpuStr,
-                icon: Icons.memory,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: StatCard(
-                label: 'Memory',
-                value: memStr,
-                icon: Icons.storage,
-              ),
+              child: _CpuMemCard(cpu: cpu.toDouble(), mem: mem.toDouble()),
             ),
           ],
         ),
@@ -179,25 +171,86 @@ class _HealthSection extends StatelessWidget {
   }
 }
 
+class _CpuMemCard extends StatelessWidget {
+  final double cpu;
+  final double mem;
+  const _CpuMemCard({required this.cpu, required this.mem});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final cpuColor = cpu > 80
+        ? cs.error
+        : cpu > 50
+            ? AppColors.warning
+            : AppColors.success;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Resources',
+              style: tt.labelSmall?.copyWith(color: cs.onSurfaceVariant)),
+          const SizedBox(height: 8),
+          Row(children: [
+            Icon(Icons.memory, size: 13, color: cs.onSurfaceVariant),
+            const SizedBox(width: 4),
+            Text('CPU ${cpu.toStringAsFixed(1)}%',
+                style: tt.bodySmall?.copyWith(color: cs.onSurface)),
+          ]),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: cpu / 100,
+              backgroundColor: cs.surfaceContainerHighest,
+              valueColor: AlwaysStoppedAnimation<Color>(cpuColor),
+              minHeight: 4,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text('RAM ${mem.toStringAsFixed(0)} MB',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+}
+
 class _RecentRunsList extends StatelessWidget {
   final List<BacktestRun> runs;
-
   const _RecentRunsList({required this.runs});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
     if (runs.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
         decoration: BoxDecoration(
-          color: const Color(0xFF1F2937),
+          color: cs.surfaceContainerHigh,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Center(
-          child: Text(
-            'No backtest runs yet',
-            style: TextStyle(color: Color(0xFF6B7280)),
-          ),
+        child: Column(
+          children: [
+            Icon(Icons.history_outlined, size: 48, color: cs.outlineVariant),
+            const SizedBox(height: 12),
+            Text('No backtest runs yet',
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => context.go('/backtest/setup'),
+              child: const Text('Run your first backtest →'),
+            ),
+          ],
         ),
       );
     }
@@ -207,60 +260,46 @@ class _RecentRunsList extends StatelessWidget {
         final eaName = run.eaName ??
             run.parameters['ea_name']?.toString() ??
             'EA #${run.eaId ?? '?'}';
-        final date = run.startedAt ?? 'Unknown date';
+        final date = run.startedAt ?? '';
         final displayDate = date.length > 19 ? date.substring(0, 19) : date;
+        final symbol = run.parameters['symbol']?.toString() ?? '';
+        final period = run.parameters['period']?.toString() ?? '';
 
-        return GestureDetector(
-          onTap: () => context.go('/results?runId=${run.runId}'),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1F2937),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                StatusBadge(status: run.status),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        eaName,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 15,
+        return Card(
+          margin: const EdgeInsets.only(bottom: 8),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => context.push('/results?runId=${run.runId}'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              child: Row(
+                children: [
+                  StatusBadge(status: run.status),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          eaName,
+                          style: tt.titleSmall?.copyWith(color: cs.onSurface),
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        displayDate,
-                        style: const TextStyle(
-                          color: Color(0xFF6B7280),
-                          fontSize: 12,
+                        const SizedBox(height: 2),
+                        Text(
+                          [if (symbol.isNotEmpty) symbol, if (period.isNotEmpty) period, if (displayDate.isNotEmpty) displayDate]
+                              .join(' • '),
+                          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Text(
-                  '#${run.runId}',
-                  style: const TextStyle(
-                    color: Color(0xFF6B7280),
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(width: 4),
-                const Icon(
-                  Icons.chevron_right,
-                  color: Color(0xFF6B7280),
-                  size: 18,
-                ),
-              ],
+                  Text('#${run.runId}',
+                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+                  const SizedBox(width: 4),
+                  Icon(Icons.chevron_right, color: cs.onSurfaceVariant, size: 18),
+                ],
+              ),
             ),
           ),
         );
@@ -272,32 +311,27 @@ class _RecentRunsList extends StatelessWidget {
 class _ErrorCard extends StatelessWidget {
   final String message;
   final VoidCallback onRetry;
-
   const _ErrorCard({required this.message, required this.onRetry});
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFF1F2937),
+        color: cs.errorContainer.withAlpha(60),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: const Color(0xFFEF4444).withAlpha(77)),
+        border: Border.all(color: cs.error.withAlpha(60)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.error_outline, color: Color(0xFFEF4444), size: 20),
+          Icon(Icons.error_outline, color: cs.error, size: 20),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: Color(0xFFFCA5A5), fontSize: 13),
-            ),
+            child: Text(message, style: tt.bodySmall?.copyWith(color: cs.onErrorContainer)),
           ),
-          TextButton(
-            onPressed: onRetry,
-            child: const Text('Retry'),
-          ),
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
         ],
       ),
     );
