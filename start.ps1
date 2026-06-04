@@ -64,7 +64,7 @@ Get-Content ".env" | ForEach-Object {
 
 # Use localhost for browser regardless of bind address
 $browserUrl = "http://localhost:$port"
-Write-OK "Server will bind on $host_:$port"
+Write-OK "Server will bind on ${host_}:$port"
 
 # 4. Check if port already in use
 $portInUse = $false
