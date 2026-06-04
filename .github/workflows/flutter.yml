@@ -4,14 +4,17 @@ on:
   push:
     branches:
       - claude/flutter-app
+      - claude/flutter-app-enhance-DmJa0
     paths:
       - 'flutter_app/**'
       - '.github/workflows/flutter.yml'
   pull_request:
     branches:
       - claude/flutter-app
+      - claude/flutter-app-enhance-DmJa0
     paths:
       - 'flutter_app/**'
+      - '.github/workflows/flutter.yml'
 
 jobs:
   build:
