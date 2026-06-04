@@ -1,0 +1,188 @@
+name: Flutter — Build Release APK
+
+on:
+  push:
+    branches:
+      - claude/flutter-app
+    paths:
+      - 'flutter_app/**'
+      - '.github/workflows/flutter.yml'
+  pull_request:
+    branches:
+      - claude/flutter-app
+    paths:
+      - 'flutter_app/**'
+
+jobs:
+  build:
+    name: Build Release APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: flutter_app
+
+    steps:
+      # ── 1. Checkout ────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── 2. Java (required by Android toolchain) ────────────────────────────
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ── 3. Flutter ─────────────────────────────────────────────────────────
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: stable
+          cache: true
+
+      # ── 4. Scaffold Android project ────────────────────────────────────────
+      #        flutter create generates android/ (does not overwrite existing lib/)
+      - name: Generate Android project scaffold
+        run: |
+          flutter create \
+            --project-name mt5_ea_platform \
+            --org com.tradest \
+            --platforms android \
+            .
+          echo "=== Scaffold complete. Files generated ==="
+          ls -la android/
+
+      # ── 5. Patch AndroidManifest for INTERNET + cleartext HTTP ─────────────
+      - name: Patch AndroidManifest.xml
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+          echo "=== Before patch ==="
+          cat "$MANIFEST"
+
+          python3 - <<'PYEOF'
+          import pathlib, re
+
+          path = pathlib.Path("android/app/src/main/AndroidManifest.xml")
+          content = path.read_text()
+
+          # Add INTERNET permission if missing
+          if 'INTERNET' not in content:
+              content = content.replace(
+                  '<manifest ',
+                  '<manifest '
+              ).replace(
+                  '<application',
+                  '    <uses-permission android:name="android.permission.INTERNET" />\n\n    <application'
+              )
+
+          # Enable cleartext traffic for HTTP to local server
+          if 'usesCleartextTraffic' not in content:
+              content = content.replace(
+                  'android:label="mt5_ea_platform"',
+                  'android:label="MT5 EA Platform" android:usesCleartextTraffic="true"'
+              )
+
+          path.write_text(content)
+          print("AndroidManifest.xml patched successfully.")
+          PYEOF
+
+          echo "=== After patch ==="
+          cat "$MANIFEST"
+
+      # ── 6. Configure release signing ──────────────────────────────────────
+      - name: Configure release signing
+        run: |
+          if [ -n "${{ secrets.KEYSTORE_BASE64 }}" ]; then
+            echo "Using keystore from GitHub Secrets..."
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/release.jks
+
+            # Detect build file format (Kotlin DSL vs Groovy DSL)
+            if [ -f "android/app/build.gradle.kts" ]; then
+              BUILD_FILE="android/app/build.gradle.kts"
+              cat >> "$BUILD_FILE" << 'EOF'
+
+          // Release signing config injected by CI
+          val keystoreFile = rootProject.file("release.jks")
+          if (keystoreFile.exists()) {
+              android.signingConfigs {
+                  create("release") {
+                      keyAlias = "${{ secrets.KEY_ALIAS }}"
+                      keyPassword = "${{ secrets.KEY_PASSWORD }}"
+                      storeFile = keystoreFile
+                      storePassword = "${{ secrets.KEY_STORE_PASSWORD }}"
+                  }
+              }
+              android.buildTypes.getByName("release") {
+                  signingConfig = android.signingConfigs.getByName("release")
+              }
+          }
+          EOF
+            else
+              BUILD_FILE="android/app/build.gradle"
+              cat >> "$BUILD_FILE" << 'EOF'
+
+          // Release signing config injected by CI
+          android.signingConfigs {
+              release {
+                  keyAlias "${{ secrets.KEY_ALIAS }}"
+                  keyPassword "${{ secrets.KEY_PASSWORD }}"
+                  storeFile file("release.jks")
+                  storePassword "${{ secrets.KEY_STORE_PASSWORD }}"
+              }
+          }
+          android.buildTypes.release {
+              signingConfig android.signingConfigs.release
+          }
+          EOF
+            fi
+            echo "Secrets-based signing configured."
+          else
+            echo "No KEYSTORE_BASE64 secret found."
+            echo "Using Flutter default (debug keystore) to sign release build."
+            echo "NOTE: Add KEYSTORE_BASE64, KEY_ALIAS, KEY_PASSWORD, KEY_STORE_PASSWORD"
+            echo "      secrets for production-grade signing."
+          fi
+
+      # ── 7. Install dependencies ────────────────────────────────────────────
+      - name: Install Flutter dependencies
+        run: |
+          flutter pub get
+          echo "=== pubspec.lock generated ==="
+
+      # ── 8. Analyze ─────────────────────────────────────────────────────────
+      - name: Run flutter analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      # ── 9. Build release APK ───────────────────────────────────────────────
+      - name: Build release APK
+        run: |
+          flutter build apk --release
+          echo "=== Build complete ==="
+          find build/app/outputs/flutter-apk -name "*.apk" -exec sh -c \
+            'printf "%s  %s\n" "$(du -sh "$1" | cut -f1)" "$1"' _ {} \;
+
+      # ── 10. Upload release APK ─────────────────────────────────────────────
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: mt5-ea-platform-release-${{ github.sha }}
+          path: flutter_app/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      # ── 11. Summary ────────────────────────────────────────────────────────
+      - name: Job summary
+        if: success()
+        run: |
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          SIZE=$(du -sh "$APK" 2>/dev/null | cut -f1 || echo "unknown")
+          echo "## ✅ Release APK Built Successfully" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Flutter version | 3.24.5 |" >> $GITHUB_STEP_SUMMARY
+          echo "| APK size | $SIZE |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Download the APK from the Artifacts section above.**" >> $GITHUB_STEP_SUMMARY

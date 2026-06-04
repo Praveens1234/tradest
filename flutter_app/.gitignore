@@ -1,0 +1,44 @@
+# Flutter/Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+flutter_export_environment.sh
+
+# Android generated
+android/
+*.jks
+*.keystore
+key.properties
+
+# iOS generated
+ios/
+
+# Windows generated
+windows/
+
+# macOS generated
+macos/
+
+# Linux generated
+linux/
+
+# Web generated
+web/
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Debug info (from --split-debug-info)
+build/debug-info/
