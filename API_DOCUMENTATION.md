@@ -15,10 +15,12 @@
 4. [File Manager](#4-file-manager)
 5. [Backtest](#5-backtest)
 6. [Usage & Health](#6-usage--health)
-7. [WebSocket API](#7-websocket-api)
-8. [MCP Server Tools](#8-mcp-server-tools)
-9. [Data Models](#9-data-models)
-10. [Error Reference](#10-error-reference)
+7. [Platform Logs](#7-platform-logs)
+8. [WebSocket API](#8-websocket-api)
+9. [MCP Server Tools](#9-mcp-server-tools)
+10. [Data Models](#10-data-models)
+11. [Error Reference](#11-error-reference)
+
 
 ---
 
@@ -1043,7 +1045,85 @@ Query the API usage/activity log. **Authentication required.**
 
 ---
 
-## 7. WebSocket API
+## 7. Platform Logs
+
+The platform captures every Python `logging.*` call to the `platform_logs` SQLite table and broadcasts new entries live over WebSocket. Log entries include the logger name, level, message, and optional structured context.
+
+---
+
+### GET /logs/recent
+
+Fetch recent platform log entries, newest first. **Authentication required.**
+
+**Query parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `limit` | integer | `100` | Maximum entries to return (1–500) |
+| `level` | string | `null` | Filter by level: `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `logger` | string | `null` | Filter by logger name substring (e.g. `core.compiler`) |
+
+**Request example:**
+
+```bash
+curl http://localhost:8000/logs/recent?limit=50&level=ERROR \
+  -H "X-API-Key: your-raw-api-key"
+```
+
+**Response `200 OK`:**
+
+```json
+[
+  {
+    "id": 1023,
+    "level": "ERROR",
+    "logger_name": "core.backtest_controller",
+    "message": "Backtest run #7 failed: terminal_path not configured",
+    "context": {},
+    "timestamp": "2024-06-01T14:31:00.123456"
+  },
+  {
+    "id": 1022,
+    "level": "INFO",
+    "logger_name": "core.compiler",
+    "message": "Compilation started for EA #3",
+    "context": { "ea_id": 3 },
+    "timestamp": "2024-06-01T14:30:55.000000"
+  }
+]
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Auto-increment primary key |
+| `level` | string | Log level (`DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`) |
+| `logger_name` | string | Python logger name (e.g. `core.compiler`, `api.routes.ea`) |
+| `message` | string | Log message text |
+| `context` | object | Optional structured context attached to the log record |
+| `timestamp` | string | ISO 8601 UTC timestamp |
+
+---
+
+### DELETE /logs/clear
+
+Delete all entries from the `platform_logs` table. **Authentication required.**
+
+**Request example:**
+
+```bash
+curl -X DELETE http://localhost:8000/logs/clear \
+  -H "X-API-Key: your-raw-api-key"
+```
+
+**Response `200 OK`:**
+
+```json
+{ "cleared": true }
+```
+
+---
+
+## 8. WebSocket API
 
 WebSocket connections do not require a separate authentication handshake — they use the same host and do not carry auth headers in the upgrade request.
 
@@ -1160,7 +1240,32 @@ Subscribe to upload progress for a specific upload session.
 
 ---
 
-## 8. MCP Server Tools
+### WS /ws/logs
+
+Live tail of platform log entries. Every log record written to the database is immediately broadcast to all connected clients.
+
+**Connection URL:** `ws://localhost:8000/ws/logs`
+
+No path parameters required. Send any text frame as a keep-alive ping.
+
+**Messages from server (JSON text frames):**
+
+```json
+{
+  "id": 1024,
+  "level": "WARNING",
+  "logger_name": "core.compiler",
+  "message": "MetaEditor not found at: C:\\MT5\\metaeditor64.exe",
+  "context": {},
+  "timestamp": "2024-06-01T14:32:10.456789"
+}
+```
+
+Entries arrive in real time as the platform processes requests. Use the `level` and `logger_name` fields for client-side filtering. The Web UI's **Logs** page uses this endpoint for its live-tail feature.
+
+---
+
+## 9. MCP Server Tools
 
 The MCP server (`python mcp_server/server.py`) exposes tools over the stdio transport for use with AI assistants. Tools are organized into five categories.
 
@@ -1405,7 +1510,7 @@ Query the usage/activity log.
 
 ---
 
-## 9. Data Models
+## 10. Data Models
 
 ### EAFile
 
@@ -1480,6 +1585,17 @@ Query the usage/activity log.
 | `error_msg` | text\|null | Error message if status is `error` |
 | `timestamp` | datetime | UTC timestamp |
 
+### PlatformLog
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Primary key |
+| `level` | string | `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL` |
+| `logger_name` | string | Python logger name (e.g. `core.compiler`) |
+| `message` | text | Log message text |
+| `context` | object | Optional JSON context attached at log time |
+| `timestamp` | datetime | UTC timestamp |
+
 ### ConflictInfo (conflict response)
 
 ```json
@@ -1509,7 +1625,7 @@ Query the usage/activity log.
 
 ---
 
-## 10. Error Reference
+## 11. Error Reference
 
 | HTTP Code | Error Name | When it Occurs | Response Body |
 |---|---|---|---|

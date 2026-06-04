@@ -23,6 +23,9 @@ logger = logging.getLogger(__name__)
 # Active tasks: run_id → asyncio.Task
 _active_tasks: dict[int, asyncio.Task] = {}
 
+# Grace period (seconds) to wait for reports after the MT5 process exits
+_REPORT_GRACE_PERIOD = 15
+
 
 async def start_backtest(db: AsyncSession, params: BacktestParams, ea_id: int | None = None) -> int:
     """Create a run record and kick off the background task. Returns run_id."""
@@ -76,14 +79,21 @@ async def _execute(run_id: int, params: BacktestParams) -> None:
         except Exception as exc:
             logger.exception("Backtest run #%d failed: %s", run_id, exc)
             await _update_status(db, run_id, "failed")
-            await backtest_manager.broadcast(str(run_id), {"status": "failed", "run_id": run_id, "error": str(exc)})
+            await backtest_manager.broadcast(
+                str(run_id), {"status": "failed", "run_id": run_id, "error": str(exc)}
+            )
 
 
 async def _run(db: AsyncSession, run_id: int, params: BacktestParams) -> None:
     if not settings.terminal_path:
-        raise RuntimeError("terminal_path not configured")
+        raise RuntimeError("terminal_path not configured — set TERMINAL_PATH in .env")
 
-    ini_path, set_path = generate_ini(params, run_id, settings.exports_dir)
+    # Resolve exports_dir to absolute so INI paths and watcher agree with MT5's CWD
+    exports_abs = str(pathlib.Path(settings.exports_dir).resolve())
+
+    ini_path, set_path = generate_ini(params, run_id, exports_abs)
+    logger.info("Backtest run #%d — INI: %s", run_id, ini_path)
+
     proc = launch_terminal(ini_path)
 
     await _update_status(db, run_id, "running", pid=proc.pid)
@@ -96,43 +106,56 @@ async def _run(db: AsyncSession, run_id: int, params: BacktestParams) -> None:
         monitor_process(proc.pid, run_id, _status_cb, max_duration=3600)
     )
     watch_task = asyncio.create_task(
-        watch_exports(run_id, settings.exports_dir, timeout=3600)
+        watch_exports(run_id, exports_abs, timeout=3600)
     )
 
+    # Wait for whichever finishes first
     done, pending = await asyncio.wait(
         {monitor_task, watch_task}, return_when=asyncio.FIRST_COMPLETED
     )
-    for t in pending:
-        t.cancel()
 
     reports = None
-    for t in done:
-        result = t.result()
-        if isinstance(result, dict) and "html" in result:
-            reports = result
 
-    if reports:
+    # If the watch_task completed first, we have reports immediately
+    if watch_task in done:
+        reports = watch_task.result()
+        for t in pending:
+            t.cancel()
+    else:
+        # Process exited first — give a grace period for MT5 to finish writing report files
+        logger.info(
+            "Run #%d: MT5 process exited; waiting up to %ds for report files...",
+            run_id, _REPORT_GRACE_PERIOD,
+        )
+        try:
+            reports = await asyncio.wait_for(watch_task, timeout=_REPORT_GRACE_PERIOD)
+        except asyncio.TimeoutError:
+            logger.warning("Run #%d: no reports appeared within grace period", run_id)
+            watch_task.cancel()
+
+    if reports and reports.get("html"):
         await _finalize(db, run_id, reports)
     else:
+        logger.error("Run #%d: finished without report files — marking failed", run_id)
         await _update_status(db, run_id, "failed")
         await backtest_manager.broadcast(str(run_id), {"status": "failed", "run_id": run_id})
 
 
 async def _finalize(db: AsyncSession, run_id: int, reports: dict) -> None:
     html_path = reports.get("html", "")
-    xml_path = reports.get("xml", "")
+    xml_path  = reports.get("xml", "")
 
-    parsed = {}
+    parsed: dict = {}
     if html_path and pathlib.Path(html_path).exists():
         parsed = parse_html_report(html_path)
     elif xml_path and pathlib.Path(xml_path).exists():
         parsed = parse_xml_report(xml_path)
 
     metrics = parsed.get("metrics", {})
-    trades = parsed.get("trades", [])
+    trades  = parsed.get("trades", [])
 
-    captured = await capture_reports(run_id, html_path, xml_path, settings.exports_dir)
-    csv_path = export_csv(trades, run_id, settings.exports_dir)
+    captured = await capture_reports(run_id, html_path, xml_path, str(pathlib.Path(settings.exports_dir).resolve()))
+    csv_path = export_csv(trades, run_id, str(pathlib.Path(settings.exports_dir).resolve()))
 
     result = BacktestResult(
         run_id=run_id,
@@ -140,12 +163,15 @@ async def _finalize(db: AsyncSession, run_id: int, reports: dict) -> None:
         trades_json=json.dumps(trades),
         html_path=captured.get("html"),
         xml_path=captured.get("xml"),
-        csv_path=csv_path,
+        csv_path=csv_path or None,
     )
     db.add(result)
     await _update_status(db, run_id, "done")
     await db.commit()
-    await backtest_manager.broadcast(str(run_id), {"status": "done", "run_id": run_id, "metrics": metrics})
+    await backtest_manager.broadcast(
+        str(run_id), {"status": "done", "run_id": run_id, "metrics": metrics}
+    )
+    logger.info("Backtest run #%d completed successfully", run_id)
 
 
 async def _update_status(db: AsyncSession, run_id: int, status: str, pid: int | None = None) -> None:

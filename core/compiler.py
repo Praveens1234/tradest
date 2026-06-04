@@ -60,6 +60,18 @@ def _parse_log(raw: str) -> tuple[list[LogEntry], list[LogEntry]]:
     return errors, warnings
 
 
+def _read_log_file(log_path: pathlib.Path) -> str:
+    """Read MetaEditor log file; tries UTF-16-LE first, falls back to UTF-8."""
+    if not log_path.exists():
+        return ""
+    for enc in ("utf-16-le", "utf-8-sig", "utf-8", "latin-1"):
+        try:
+            return log_path.read_text(encoding=enc, errors="strict")
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return log_path.read_text(encoding="utf-8", errors="replace")
+
+
 async def compile_ea(
     db: AsyncSession,
     ea_id: int,
@@ -81,9 +93,19 @@ async def compile_ea(
     status = "error"
 
     if not settings.metaeditor_path:
-        raw = "MetaEditor path not configured."
+        raw = "MetaEditor path not configured. Set METAEDITOR_PATH in .env."
+        logger.warning("Compile skipped — METAEDITOR_PATH not set")
     else:
         compile_failed = False
+        log_path = ea_abs.with_suffix(".log")
+
+        # Remove stale log file so we can detect a fresh one
+        if log_path.exists():
+            try:
+                log_path.unlink()
+            except OSError:
+                pass
+
         try:
             subprocess.run(
                 [settings.metaeditor_path, f"/compile:{ea_abs}", "/log"],
@@ -92,6 +114,7 @@ async def compile_ea(
             )
         except subprocess.TimeoutExpired:
             logger.error("MetaEditor compilation timed out for EA #%d", ea_id)
+            raw = "Compilation timed out after 120 seconds."
             compile_failed = True
         except FileNotFoundError:
             logger.error("MetaEditor not found at: %s", settings.metaeditor_path)
@@ -103,10 +126,7 @@ async def compile_ea(
             compile_failed = True
 
         if not compile_failed:
-            log_path = ea_abs.with_suffix(".log")
-            if log_path.exists():
-                raw = log_path.read_text(encoding="utf-16-le", errors="replace")
-
+            raw = _read_log_file(log_path)
             errors, warnings = _parse_log(raw)
             if errors:
                 status = "error"
