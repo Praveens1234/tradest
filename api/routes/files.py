@@ -48,6 +48,10 @@ async def list_dir(path: str = ""):
 
 @router.get("/read", dependencies=[Depends(require_auth)])
 async def read_file(path: str = Query(...)):
+    from core.file_manager.fs_operations import _BINARY_EXTENSIONS
+    import pathlib
+    if pathlib.Path(path).suffix.lower() in _BINARY_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Binary file cannot be read as text: {pathlib.Path(path).name}")
     try:
         content = fs_operations.read_file(path)
         return {"path": path, "content": content}

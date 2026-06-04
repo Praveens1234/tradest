@@ -4,8 +4,22 @@ import EditorTabs from '../components/EditorTabs'
 import UploadDropzone from '../components/UploadDropzone'
 import ConflictDialog from '../components/ConflictDialog'
 import { useFileStore } from '../store/fileStore'
-import { getTree, readFile, writeFile, uploadFile } from '../api/files'
+import { getTree, readFile, writeFile, uploadFile, downloadFile } from '../api/files'
 import { RefreshCw, Save } from 'lucide-react'
+
+const BINARY_EXTS = new Set([
+  'ex5', 'ex4', 'dll', 'exe', 'so', 'bin',
+  'zip', 'gz', 'tar', 'rar', '7z',
+  'jpg', 'jpeg', 'png', 'gif', 'bmp', 'ico',
+  'pdf', 'doc', 'docx', 'xls', 'xlsx',
+  'mp3', 'mp4', 'avi', 'mov', 'db', 'sqlite',
+])
+
+export const BINARY_SENTINEL = '__BINARY_FILE__'
+
+function isBinary(path) {
+  return BINARY_EXTS.has(path.split('.').pop().toLowerCase())
+}
 
 export default function FileManager() {
   const {
@@ -32,12 +46,30 @@ export default function FileManager() {
   const handleSelect = async (node) => {
     selectPath(node.path)
     if (!node.is_dir) {
+      if (isBinary(node.path)) {
+        openFile(node.path, BINARY_SENTINEL)
+        return
+      }
       try {
         const { data } = await readFile(node.path)
         openFile(node.path, data.content)
       } catch (err) {
         console.error('Failed to read file:', err)
       }
+    }
+  }
+
+  const handleDownload = async (path) => {
+    try {
+      const { data } = await downloadFile(path)
+      const url = URL.createObjectURL(data)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = path.split('/').pop()
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Download failed:', err)
     }
   }
 
@@ -119,7 +151,7 @@ export default function FileManager() {
           </button>
         </div>
         <div className="flex-1 overflow-hidden">
-          <EditorTabs onSave={handleSave} />
+          <EditorTabs onSave={handleSave} onDownload={handleDownload} />
         </div>
       </div>
 
