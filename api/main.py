@@ -12,14 +12,18 @@ from api.routes.ea import router as ea_router
 from api.routes.files import router as files_router
 from api.routes.backtest import router as backtest_router
 from api.routes.usage import router as usage_router
+from api.routes.logs import router as logs_router
 from api.websockets.compile_ws import compile_manager
 from api.websockets.backtest_ws import backtest_manager
 from api.websockets.upload_ws import upload_manager
+from api.websockets.logs_ws import logs_manager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await init_db()
+    from core.log_registry import setup_log_registry
+    setup_log_registry()
     yield
 
 
@@ -44,6 +48,7 @@ app.include_router(ea_router, prefix="/ea", tags=["EA"])
 app.include_router(files_router, prefix="/files", tags=["Files"])
 app.include_router(backtest_router, prefix="/backtest", tags=["Backtest"])
 app.include_router(usage_router, tags=["Usage"])
+app.include_router(logs_router, tags=["Logs"])
 
 
 # WebSocket endpoints
@@ -77,6 +82,16 @@ async def ws_upload(ws: WebSocket, upload_id: str):
             await ws.receive_text()
     except WebSocketDisconnect:
         upload_manager.disconnect(upload_id, ws)
+
+
+@app.websocket("/ws/logs")
+async def ws_logs(ws: WebSocket):
+    await logs_manager.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()  # keep-alive
+    except WebSocketDisconnect:
+        logs_manager.disconnect(ws)
 
 
 # Serve built React SPA at "/"

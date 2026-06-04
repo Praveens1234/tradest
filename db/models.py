@@ -77,3 +77,14 @@ class UsageEvent(Base):
     status = Column(String(20), default="ok")
     error_msg = Column(Text, nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
+
+
+class PlatformLog(Base):
+    __tablename__ = "platform_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    level = Column(String(10), nullable=False)       # DEBUG INFO WARNING ERROR CRITICAL
+    logger_name = Column(String(100), nullable=False)
+    message = Column(Text, nullable=False)
+    context_json = Column(Text, default="{}")
+    timestamp = Column(DateTime, default=datetime.utcnow)

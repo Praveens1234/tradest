@@ -12,6 +12,7 @@ import Results from './pages/Results'
 import TradeLedger from './pages/TradeLedger'
 import History from './pages/History'
 import UsageLog from './pages/UsageLog'
+import Logs from './pages/Logs'
 import Settings from './pages/Settings'
 import SetupWizard from './pages/SetupWizard'
 
@@ -48,6 +49,7 @@ export default function App() {
       <Route path="/results"             element={P(Results)} />
       <Route path="/ledger"              element={P(TradeLedger)} />
       <Route path="/history"             element={P(History)} />
+      <Route path="/logs"                element={P(Logs)} />
       <Route path="/usage"               element={P(UsageLog)} />
       <Route path="/settings"            element={P(Settings)} />
       <Route path="/setup"               element={P(SetupWizard)} />
