@@ -222,5 +222,6 @@ async def compile_by_path(path: str, db: AsyncSession = Depends(get_db)):
         "status": result.status,
         "errors": [e.__dict__ for e in result.errors],
         "warnings": [w.__dict__ for w in result.warnings],
+        "raw_log": result.raw_log,
         "compiled_at": result.compiled_at,
     }

@@ -32,10 +32,12 @@ The MT5 EA Platform automates the full lifecycle of MetaTrader 5 Expert Advisor 
 | Backtesting | Full MT5 Strategy Tester lifecycle: INI generation → terminal launch → process monitor → report capture |
 | File Manager | Tree browse, read/write, mkdir, rename, copy, move, soft-delete, ZIP download, content search |
 | Dual Auth | JWT Bearer tokens (web session) + static X-API-Key (CLI/MCP/mobile) |
-| MCP Server | 30+ tools over stdio for AI assistant integration (Claude, Cursor, etc.) |
-| React Web UI | SPA served from the API process — Monaco editor, backtest dashboard, usage log |
+| MCP Server | 32+ tools over stdio for AI assistant integration (Claude, Cursor, etc.) |
+| React Web UI | SPA served from the API process — Monaco editor, backtest dashboard, logs viewer, usage log |
+| Centralized Log Registry | All `logging.*` calls captured to SQLite, served via REST and live WebSocket tail |
 | SQLite | Zero-dependency persistence with WAL mode + async SQLAlchemy 2.0 |
 | Auto-detection | 5-tier MT5 installation detection (registry → known paths → AppData → PATH → glob scan) |
+| PowerShell Scripts | `setup.ps1` (one-click install + API key generation) and `start.ps1` (one-click launch) |
 
 ---
 
@@ -93,6 +95,21 @@ The MT5 EA Platform automates the full lifecycle of MetaTrader 5 Expert Advisor 
 ---
 
 ## Quick Start
+
+### Windows (automated — recommended)
+
+```powershell
+git clone https://github.com/praveens1234/tradest.git
+cd tradest
+
+# One-click setup: installs deps, generates API key, detects MT5, creates .env
+.\setup.ps1
+
+# One-click launch (every time after setup)
+.\start.ps1
+```
+
+### Manual (all platforms)
 
 ```bash
 # 1. Clone
@@ -207,7 +224,7 @@ npm run build      # outputs to ../web_ui_dist
 | Path | Description |
 |---|---|
 | `/login` | API key login |
-| `/dashboard` | Overview metrics |
+| `/dashboard` | Overview metrics and quick actions |
 | `/files` | File manager |
 | `/compiler` | EA code editor + compile |
 | `/backtest/setup` | Configure backtest parameters |
@@ -215,6 +232,7 @@ npm run build      # outputs to ../web_ui_dist
 | `/results` | Backtest result metrics |
 | `/ledger` | Trade-by-trade breakdown |
 | `/history` | Backtest run history |
+| `/logs` | Platform log viewer with live tail and level filtering |
 | `/usage` | API usage log |
 | `/settings` | MT5 path configuration |
 | `/setup` | Initial setup wizard |
@@ -223,7 +241,7 @@ npm run build      # outputs to ../web_ui_dist
 
 ## MCP Server
 
-The MCP server exposes 30+ tools via stdio transport for use with AI assistants.
+The MCP server exposes 32+ tools via stdio transport for use with AI assistants.
 
 **Run the MCP server:**
 ```bash
@@ -267,7 +285,7 @@ pytest tests/test_ea.py -v
 pytest tests/ --cov=. --cov-report=term-missing
 ```
 
-The test suite includes **101 tests** across 7 modules covering all API endpoints, core business logic, security (path traversal, auth), and edge cases.
+The test suite includes **109 tests** across 8 modules covering all API endpoints, core business logic, security (path traversal, auth), log registry, and edge cases.
 
 ---
 
@@ -284,16 +302,19 @@ tradest/
 │   │   ├── ea.py                  # /ea/* CRUD, upload, compile, logs
 │   │   ├── files.py               # /files/* tree, read/write, rename, zip
 │   │   ├── backtest.py            # /backtest/* run, status, result, history
-│   │   └── usage.py               # GET /health, GET /usage/events
+│   │   ├── usage.py               # GET /health, GET /usage/events
+│   │   └── logs.py                # GET /logs/recent, DELETE /logs/clear
 │   └── websockets/
 │       ├── compile_ws.py          # Live compile log streaming
 │       ├── backtest_ws.py         # Live backtest status streaming
-│       └── upload_ws.py           # Upload progress streaming
+│       ├── upload_ws.py           # Upload progress streaming
+│       └── logs_ws.py             # Live platform log tail broadcast
 ├── core/
 │   ├── compiler.py                # MetaEditor64 CLI + UTF-16-LE log parser
 │   ├── ea_manager.py              # EA file + DB CRUD
 │   ├── backtest_controller.py     # Full backtest lifecycle orchestration
 │   ├── usage_store.py             # Usage event logging and query
+│   ├── log_registry.py            # DBLogHandler: captures all logging.* to SQLite + WS
 │   ├── report_exporter.py         # HTML/XML report capture
 │   ├── ledger_exporter.py         # Trade ledger CSV export
 │   ├── file_manager/
@@ -313,10 +334,10 @@ tradest/
 │       ├── mt5_detector.py        # 5-tier MT5 path detection
 │       └── mt5_installer.py       # Silent MT5 installer
 ├── db/
-│   ├── models.py                  # EAFile, CompileLog, BacktestRun, BacktestResult, UsageEvent
+│   ├── models.py                  # EAFile, CompileLog, BacktestRun, BacktestResult, UsageEvent, PlatformLog
 │   └── database.py                # Async SQLite engine, session factory, init_db
 ├── mcp_server/
-│   └── server.py                  # FastMCP stdio server — 30+ tools
+│   └── server.py                  # FastMCP stdio server — 32+ tools
 ├── web_ui/
 │   ├── src/
 │   │   ├── pages/                 # Login, Dashboard, FileManager, Compiler, Backtest…
@@ -333,11 +354,14 @@ tradest/
 │   ├── test_backtest.py           # Backtest lifecycle tests (12)
 │   ├── test_usage.py              # Usage events and health tests (12)
 │   ├── test_core.py               # Core unit tests (23)
-│   └── test_mcp.py                # MCP server tests (12)
+│   ├── test_mcp.py                # MCP server tests (12)
+│   └── test_logs.py               # Log registry endpoint tests (8)
 ├── main.py                        # Entry point: argparse → uvicorn
 ├── config.py                      # Pydantic BaseSettings
 ├── requirements.txt               # Python dependencies
 ├── pytest.ini                     # Test configuration
+├── setup.ps1                      # Windows: one-click install + API key setup
+├── start.ps1                      # Windows: one-click launch with browser open
 ├── .env.example                   # Environment variable template
 └── API_DOCUMENTATION.md           # Complete API reference
 ```

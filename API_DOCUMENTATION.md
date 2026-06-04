@@ -377,7 +377,7 @@ Get the most recent compile log for an EA.
 ## 4. File Manager
 
 All endpoints are prefixed with `/files` and require authentication.  
-All `path` values are **relative to the workspace root** (`MQL5_ROOT` or `WORKSPACE_DIR`). Path traversal attempts (`../`) are blocked with a `404`.
+All `path` values are **relative to the workspace root** (`MQL5_ROOT` or `WORKSPACE_DIR`). Path traversal attempts (`../`) are blocked: read operations return `404`, write/mutate operations return `400`.
 
 ---
 
@@ -740,7 +740,20 @@ The file must already be registered in the database (via `/ea/upload` or `/ea/cr
 |---|---|---|---|
 | `path` | string | Yes | Workspace-relative path to the `.mq5` file |
 
-**Response `200 OK`:** Same as `POST /ea/{ea_id}/compile`.
+**Response `200 OK`:**
+
+```json
+{
+  "ea_id": 1,
+  "status": "success",
+  "errors": [],
+  "warnings": [],
+  "raw_log": "...",
+  "compiled_at": "2024-06-01T14:31:00Z"
+}
+```
+
+See `POST /ea/{ea_id}/compile` for full field descriptions.
 
 **Errors:** `404` if path is not registered.
 
@@ -858,9 +871,9 @@ Get parsed result metrics and trades from a completed backtest.
       "symbol": "EURUSD"
     }
   ],
-  "html_path": "exports/42/report.html",
-  "xml_path": "exports/42/report.xml",
-  "csv_path": "exports/42/ledger.csv"
+  "html_path": "C:\\Users\\User\\tradest\\exports\\42\\report.html",
+  "xml_path": "C:\\Users\\User\\tradest\\exports\\42\\report.xml",
+  "csv_path": "C:\\Users\\User\\tradest\\exports\\42\\ledger.csv"
 }
 ```
 
@@ -880,9 +893,9 @@ Get the available report file list with sizes for a completed backtest.
   "metrics": { "net_profit": 1234.56 },
   "trades": [],
   "files": {
-    "html": { "path": "exports/42/report.html", "size_bytes": 45000 },
-    "xml": { "path": "exports/42/report.xml", "size_bytes": 120000 },
-    "csv": { "path": "exports/42/ledger.csv", "size_bytes": 5000 }
+    "html": { "path": "C:\\Users\\User\\tradest\\exports\\42\\report.html", "size_bytes": 45000 },
+    "xml": { "path": "C:\\Users\\User\\tradest\\exports\\42\\report.xml", "size_bytes": 120000 },
+    "csv": { "path": "C:\\Users\\User\\tradest\\exports\\42\\ledger.csv", "size_bytes": 5000 }
   }
 }
 ```
