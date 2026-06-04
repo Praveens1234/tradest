@@ -23,17 +23,16 @@ class ApiClient {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          final token = await StorageService.instance.getToken();
+          final apiKey = await StorageService.instance.getApiKey();
           final baseUrl = await StorageService.instance.getServerUrl();
           options.baseUrl = baseUrl;
-          if (token != null && token.isNotEmpty) {
-            options.headers['Authorization'] = 'Bearer $token';
+          if (apiKey != null && apiKey.isNotEmpty) {
+            options.headers['X-API-Key'] = apiKey;
           }
           handler.next(options);
         },
         onError: (error, handler) async {
           if (error.response?.statusCode == 401) {
-            await StorageService.instance.clear();
             _onUnauthorized?.call();
           }
           handler.next(error);

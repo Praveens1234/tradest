@@ -19,6 +19,8 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _urlCtrl = TextEditingController();
+  final _apiKeyCtrl = TextEditingController();
+  bool _obscureApiKey = true;
   bool _testingConnection = false;
   Map<String, dynamic>? _healthResult;
   String? _healthError;
@@ -27,13 +29,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadUrl();
+    _loadSettings();
     _loadPackageInfo();
   }
 
-  Future<void> _loadUrl() async {
+  Future<void> _loadSettings() async {
     final url = await StorageService.instance.getServerUrl();
-    if (mounted) _urlCtrl.text = url;
+    final apiKey = await StorageService.instance.getApiKey();
+    if (mounted) {
+      _urlCtrl.text = url;
+      _apiKeyCtrl.text = apiKey ?? '';
+    }
   }
 
   Future<void> _loadPackageInfo() async {
@@ -48,16 +54,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   void dispose() {
     _urlCtrl.dispose();
+    _apiKeyCtrl.dispose();
     super.dispose();
   }
 
-  Future<void> _saveUrl() async {
+  Future<void> _saveSettings() async {
     final url = _urlCtrl.text.trim();
+    final apiKey = _apiKeyCtrl.text.trim();
     if (url.isEmpty) return;
     await StorageService.instance.saveServerUrl(url);
+    if (apiKey.isNotEmpty) {
+      await StorageService.instance.saveApiKey(apiKey);
+    }
     if (mounted) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Server URL saved')));
+          .showSnackBar(const SnackBar(content: Text('Settings saved')));
     }
   }
 
@@ -70,6 +81,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final url = _urlCtrl.text.trim();
     try {
       await StorageService.instance.saveServerUrl(url);
+      final apiKey = _apiKeyCtrl.text.trim();
+      if (apiKey.isNotEmpty) {
+        await StorageService.instance.saveApiKey(apiKey);
+      }
       final response =
           await ApiClient.instance.get<Map<String, dynamic>>('/health');
       if (mounted) {
@@ -127,6 +142,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     autocorrect: false,
                   ),
                   const SizedBox(height: 12),
+                  TextField(
+                    controller: _apiKeyCtrl,
+                    obscureText: _obscureApiKey,
+                    decoration: InputDecoration(
+                      labelText: 'API Key',
+                      hintText: 'Enter your API key',
+                      prefixIcon: const Icon(Icons.key_outlined),
+                      suffixIcon: IconButton(
+                        icon: Icon(_obscureApiKey
+                            ? Icons.visibility_outlined
+                            : Icons.visibility_off_outlined),
+                        onPressed: () =>
+                            setState(() => _obscureApiKey = !_obscureApiKey),
+                      ),
+                    ),
+                    autocorrect: false,
+                    enableSuggestions: false,
+                  ),
+                  const SizedBox(height: 12),
                   Row(children: [
                     Expanded(
                       child: OutlinedButton.icon(
@@ -144,7 +178,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton.icon(
-                        onPressed: _saveUrl,
+                        onPressed: _saveSettings,
                         icon: const Icon(Icons.save_outlined),
                         label: const Text('Save'),
                       ),

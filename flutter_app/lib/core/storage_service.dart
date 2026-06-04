@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class StorageService {
   static const _tokenKey = 'auth_token';
+  static const _apiKeyKey = 'api_key';
   static const _serverUrlKey = 'server_url';
   static const _defaultServerUrl = 'http://192.168.1.10:8000';
 
@@ -39,6 +40,16 @@ class StorageService {
   Future<String?> getToken() async {
     final prefs = await _storage;
     return prefs.getString(_tokenKey);
+  }
+
+  Future<void> saveApiKey(String key) async {
+    final prefs = await _storage;
+    await prefs.setString(_apiKeyKey, key);
+  }
+
+  Future<String?> getApiKey() async {
+    final prefs = await _storage;
+    return prefs.getString(_apiKeyKey);
   }
 
   Future<void> saveServerUrl(String url) async {
@@ -99,9 +110,10 @@ class StorageService {
     return prefs.getString(_kThemeMode) ?? 'system';
   }
 
-  // Logout only clears the token, not the server URL or preferences.
+  // Logout clears credentials but keeps server URL and preferences.
   Future<void> clear() async {
     final prefs = await _storage;
     await prefs.remove(_tokenKey);
+    await prefs.remove(_apiKeyKey);
   }
 }

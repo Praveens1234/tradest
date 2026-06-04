@@ -9,8 +9,8 @@ class AuthNotifier extends StateNotifier<AsyncValue<String?>> {
 
   Future<void> _init() async {
     try {
-      final token = await StorageService.instance.getToken();
-      state = AsyncValue.data(token);
+      final apiKey = await StorageService.instance.getApiKey();
+      state = AsyncValue.data(apiKey);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
     }
@@ -21,6 +21,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<String?>> {
     try {
       await StorageService.instance.saveServerUrl(serverUrl);
 
+      // Validate the API key against the server
       final dio = Dio(
         BaseOptions(
           baseUrl: serverUrl,
@@ -33,18 +34,14 @@ class AuthNotifier extends StateNotifier<AsyncValue<String?>> {
         ),
       );
 
-      final response = await dio.post<Map<String, dynamic>>(
+      await dio.post<Map<String, dynamic>>(
         '/auth/login',
         data: {'api_key': apiKey},
       );
 
-      final token = response.data?['token'] as String?;
-      if (token == null || token.isEmpty) {
-        throw Exception('No token in response');
-      }
-
-      await StorageService.instance.saveToken(token);
-      state = AsyncValue.data(token);
+      // Store the raw API key — it never expires unlike JWT tokens
+      await StorageService.instance.saveApiKey(apiKey);
+      state = AsyncValue.data(apiKey);
     } on DioException catch (e, st) {
       final message = e.response?.data?['detail'] ?? e.message ?? 'Login failed';
       state = AsyncValue.error(Exception(message), st);

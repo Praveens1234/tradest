@@ -1,17 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/router.dart';
+import 'core/api_client.dart';
 import 'core/theme_provider.dart';
 
-class MT5App extends ConsumerWidget {
+class MT5App extends ConsumerStatefulWidget {
   const MT5App({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MT5App> createState() => _MT5AppState();
+}
+
+class _MT5AppState extends ConsumerState<MT5App> {
+  final _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
+  @override
+  void initState() {
+    super.initState();
+    ApiClient.instance.setOnUnauthorized(() {
+      _scaffoldMessengerKey.currentState?.showSnackBar(
+        const SnackBar(
+          content: Text('Invalid API key — please update it in Settings.'),
+          duration: Duration(seconds: 4),
+        ),
+      );
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       title: 'MT5 EA Platform',
       debugShowCheckedModeBanner: false,
       themeMode: themeMode,
