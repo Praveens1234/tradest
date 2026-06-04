@@ -97,6 +97,10 @@ async def compile_ea(
             logger.error("MetaEditor not found at: %s", settings.metaeditor_path)
             raw = f"MetaEditor executable not found: {settings.metaeditor_path}"
             compile_failed = True
+        except Exception as exc:
+            logger.error("MetaEditor execution error for EA #%d: %s", ea_id, exc)
+            raw = f"MetaEditor execution error: {exc}"
+            compile_failed = True
 
         if not compile_failed:
             log_path = ea_abs.with_suffix(".log")

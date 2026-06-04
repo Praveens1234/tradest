@@ -18,7 +18,7 @@ async def get_events(
     date: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    events = await usage_store.get_events(db, limit=limit, action_filter=action)
+    events = await usage_store.get_events(db, limit=limit, action_filter=action, date_filter=date)
     return [
         {
             "id": e.id,

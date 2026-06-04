@@ -434,4 +434,3 @@ async def usage_log(limit: int = 50, action: str | None = None) -> list:
 if __name__ == "__main__":
     asyncio.run(init_db())
     mcp.run(transport="stdio")
-    mcp.run(transport="stdio")
