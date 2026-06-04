@@ -26,7 +26,7 @@
 
 ## 1. Authentication
 
-All endpoints except `GET /health` require authentication. Two methods are accepted:
+All endpoints except `GET /health` and `POST /auth/login` require authentication. Two methods are accepted:
 
 ### Method 1 — Bearer JWT
 
@@ -1291,11 +1291,14 @@ The MCP server (`python mcp_server/server.py`) exposes tools over the stdio tran
 Validate an API key against the server configuration.
 
 ```json
-// Valid
+// Valid key
 {"valid": true}
 
-// Invalid
-{"valid": false, "error": "Invalid key"}
+// Wrong key
+{"valid": false}
+
+// Server has no API key configured
+{"valid": false, "error": "API key not configured"}
 ```
 
 ---
