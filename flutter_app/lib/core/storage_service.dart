@@ -14,6 +14,7 @@ class StorageService {
   static const _lastCurrencyKey = 'last_currency';
   static const _lastLeverageKey = 'last_leverage';
   static const _lastModelKey = 'last_model';
+  static const _kThemeMode = 'theme_mode';
 
   static StorageService? _instance;
   SharedPreferences? _prefs;
@@ -86,6 +87,16 @@ class StorageService {
       'leverage': prefs.getInt(_lastLeverageKey) ?? 100,
       'model': prefs.getInt(_lastModelKey) ?? 1,
     };
+  }
+
+  Future<void> saveThemeMode(String mode) async {
+    final prefs = await _storage;
+    await prefs.setString(_kThemeMode, mode);
+  }
+
+  Future<String> getThemeMode() async {
+    final prefs = await _storage;
+    return prefs.getString(_kThemeMode) ?? 'system';
   }
 
   // Logout only clears the token, not the server URL or preferences.

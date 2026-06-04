@@ -6,6 +6,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../core/storage_service.dart';
+import '../../core/theme_provider.dart';
 import '../../features/auth/auth_provider.dart';
 import '../../shared/widgets/app_scaffold.dart';
 
@@ -209,6 +210,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       ]),
                     ),
                   ],
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Theme section
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('APPEARANCE',
+                      style: tt.labelSmall?.copyWith(
+                          color: cs.onSurfaceVariant, letterSpacing: 1.2)),
+                  const SizedBox(height: 14),
+                  Text('Theme',
+                      style: tt.bodyMedium
+                          ?.copyWith(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 10),
+                  SegmentedButton<ThemeMode>(
+                    segments: const [
+                      ButtonSegment(
+                        value: ThemeMode.light,
+                        icon: Icon(Icons.light_mode, size: 18),
+                        label: Text('Light'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.system,
+                        icon: Icon(Icons.brightness_auto, size: 18),
+                        label: Text('System'),
+                      ),
+                      ButtonSegment(
+                        value: ThemeMode.dark,
+                        icon: Icon(Icons.dark_mode, size: 18),
+                        label: Text('Dark'),
+                      ),
+                    ],
+                    selected: {ref.watch(themeModeProvider)},
+                    onSelectionChanged: (s) =>
+                        ref.read(themeModeProvider.notifier).set(s.first),
+                  ),
                 ],
               ),
             ),

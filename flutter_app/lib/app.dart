@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'config/router.dart';
+import 'core/theme_provider.dart';
 
 class MT5App extends ConsumerWidget {
   const MT5App({super.key});
@@ -8,20 +9,23 @@ class MT5App extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeModeProvider);
 
     return MaterialApp.router(
       title: 'MT5 EA Platform',
       debugShowCheckedModeBanner: false,
-      theme: _buildTheme(),
+      themeMode: themeMode,
+      theme: _buildTheme(Brightness.light),
+      darkTheme: _buildTheme(Brightness.dark),
       routerConfig: router,
     );
   }
 
-  ThemeData _buildTheme() {
+  ThemeData _buildTheme(Brightness brightness) {
     const seed = Color(0xFF3B82F6);
     final cs = ColorScheme.fromSeed(
       seedColor: seed,
-      brightness: Brightness.dark,
+      brightness: brightness,
     );
 
     return ThemeData(
@@ -105,6 +109,11 @@ class MT5App extends ConsumerWidget {
       chipTheme: ChipThemeData(
         side: BorderSide(color: cs.outlineVariant),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: SegmentedButton.styleFrom(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
       ),
       textTheme: const TextTheme(
         displayLarge: TextStyle(fontSize: 57, fontWeight: FontWeight.w400),

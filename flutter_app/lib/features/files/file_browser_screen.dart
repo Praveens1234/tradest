@@ -1,11 +1,15 @@
+import 'dart:async';
+import 'package:file_picker/file_picker.dart';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
+import '../../core/storage_service.dart';
 import '../../shared/widgets/app_scaffold.dart';
 import '../../shared/widgets/shimmer_loading.dart';
 
-// Simple file node model
 class _FileNode {
   final String name;
   final String path;
@@ -25,9 +29,7 @@ class _FileNode {
     final path = json['path']?.toString() ?? json['name']?.toString() ?? '';
     final name = path.contains('/') ? path.split('/').last : path;
     final isDir = json['is_dir'] as bool? ?? json['type'] == 'directory';
-    final ext = name.contains('.')
-        ? name.split('.').last.toLowerCase()
-        : null;
+    final ext = name.contains('.') ? name.split('.').last.toLowerCase() : null;
     return _FileNode(
       name: name,
       path: path,
@@ -49,6 +51,18 @@ final _fileListProvider =
       .toList();
 });
 
+final _fileSearchProvider = FutureProvider.family
+    .autoDispose<List<_FileNode>, ({String query, String path})>(
+        (ref, args) async {
+  final response = await ApiClient.instance.get<List<dynamic>>(
+    '/files/search',
+    params: {'q': args.query, if (args.path.isNotEmpty) 'path': args.path},
+  );
+  return (response.data ?? [])
+      .map((e) => _FileNode.fromJson(Map<String, dynamic>.from(e as Map)))
+      .toList();
+});
+
 class FileBrowserScreen extends ConsumerStatefulWidget {
   const FileBrowserScreen({super.key});
 
@@ -59,20 +73,223 @@ class FileBrowserScreen extends ConsumerStatefulWidget {
 class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
   String _currentPath = '';
   final List<String> _breadcrumbs = [];
+  bool _searching = false;
+  String _searchQuery = '';
+  final _searchCtrl = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   void _navigate(String path) {
     setState(() {
       _currentPath = path;
       _breadcrumbs.add(path);
+      _searching = false;
+      _searchQuery = '';
+      _searchCtrl.clear();
     });
   }
 
-  void _navigateUp() {
-    if (_breadcrumbs.isNotEmpty) {
-      _breadcrumbs.removeLast();
-      setState(() {
-        _currentPath = _breadcrumbs.isNotEmpty ? _breadcrumbs.last : '';
+  void _startSearch() => setState(() => _searching = true);
+
+  void _stopSearch() {
+    setState(() {
+      _searching = false;
+      _searchQuery = '';
+      _searchCtrl.clear();
+    });
+  }
+
+  Future<void> _uploadFile() async {
+    final result = await FilePicker.platform.pickFiles(withData: true);
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.bytes == null) return;
+
+    try {
+      final formData = FormData.fromMap({
+        'file': MultipartFile.fromBytes(file.bytes!, filename: file.name),
       });
+      await ApiClient.instance.post<dynamic>(
+        '/files/upload',
+        data: formData,
+        params: {'path': _currentPath, 'override': false},
+      );
+      ref.invalidate(_fileListProvider(_currentPath));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Uploaded ${file.name}')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Upload failed: ${ApiClient.extractError(e)}'),
+          backgroundColor: Theme.of(context).colorScheme.errorContainer,
+        ));
+      }
+    }
+  }
+
+  Future<void> _mkdir() async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Create Folder'),
+        content: TextField(
+          controller: ctrl,
+          decoration:
+              const InputDecoration(labelText: 'Folder name', hintText: 'NewFolder'),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+              child: const Text('Create')),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty) return;
+
+    final fullPath = _currentPath.isEmpty ? result : '$_currentPath/$result';
+    try {
+      await ApiClient.instance.post<dynamic>('/files/mkdir', data: {'path': fullPath});
+      ref.invalidate(_fileListProvider(_currentPath));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Created $result')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Failed: ${ApiClient.extractError(e)}'),
+          backgroundColor: Theme.of(context).colorScheme.errorContainer,
+        ));
+      }
+    }
+  }
+
+  Future<void> _showContextMenu(BuildContext context, _FileNode node) async {
+    final serverUrl = await StorageService.instance.getServerUrl();
+    if (!context.mounted) return;
+
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _FileContextMenu(
+        node: node,
+        onView: node.isDir ? null : () => _viewFile(context, node),
+        onDownload: node.isDir
+            ? null
+            : () => _openUrl(
+                '$serverUrl/files/download?path=${Uri.encodeComponent(node.path)}'),
+        onDownloadZip: node.isDir
+            ? () => _openUrl(
+                '$serverUrl/files/download-zip?path=${Uri.encodeComponent(node.path)}')
+            : null,
+        onRename: () => _rename(context, node),
+        onDelete: () => _delete(context, node),
+      ),
+    );
+  }
+
+  Future<void> _openUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  Future<void> _rename(BuildContext context, _FileNode node) async {
+    final ctrl = TextEditingController(text: node.name);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Rename'),
+        content: TextField(
+          controller: ctrl,
+          decoration: InputDecoration(labelText: 'New name', hintText: node.name),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, ctrl.text.trim()),
+              child: const Text('Rename')),
+        ],
+      ),
+    );
+    if (result == null || result.isEmpty || result == node.name) return;
+
+    try {
+      await ApiClient.instance.put<dynamic>(
+        '/files/rename',
+        data: {'path': node.path, 'new_name': result, 'override': false},
+      );
+      ref.invalidate(_fileListProvider(_currentPath));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Renamed to $result')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Rename failed: ${ApiClient.extractError(e)}'),
+          backgroundColor: Theme.of(context).colorScheme.errorContainer,
+        ));
+      }
+    }
+  }
+
+  Future<void> _delete(BuildContext context, _FileNode node) async {
+    final cs = Theme.of(context).colorScheme;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: Text('Delete ${node.isDir ? 'Folder' : 'File'}'),
+        content: Text('Move "${node.name}" to trash?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: cs.errorContainer,
+              foregroundColor: cs.onErrorContainer,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ApiClient.instance.delete<dynamic>(
+        '/files/delete',
+        data: {'path': node.path, 'soft': true},
+      );
+      ref.invalidate(_fileListProvider(_currentPath));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Moved ${node.name} to trash')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Delete failed: ${ApiClient.extractError(e)}'),
+          backgroundColor: Theme.of(context).colorScheme.errorContainer,
+        ));
+      }
     }
   }
 
@@ -80,42 +297,70 @@ class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
-    final filesAsync = ref.watch(_fileListProvider(_currentPath));
+
+    final listAsync = _searching && _searchQuery.length >= 2
+        ? ref.watch(
+            _fileSearchProvider((query: _searchQuery, path: _currentPath)))
+        : ref.watch(_fileListProvider(_currentPath));
 
     return AppScaffold(
       title: 'File Browser',
       actions: [
-        IconButton(
-          icon: const Icon(Icons.refresh_outlined),
-          onPressed: () => ref.invalidate(_fileListProvider(_currentPath)),
-        ),
+        if (_searching)
+          IconButton(icon: const Icon(Icons.close), onPressed: _stopSearch)
+        else ...[
+          IconButton(icon: const Icon(Icons.search), onPressed: _startSearch),
+          IconButton(
+            icon: const Icon(Icons.create_new_folder_outlined),
+            tooltip: 'New folder',
+            onPressed: _mkdir,
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh_outlined),
+            onPressed: () => ref.invalidate(_fileListProvider(_currentPath)),
+          ),
+        ],
       ],
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _uploadFile,
+        icon: const Icon(Icons.upload_file),
+        label: const Text('Upload'),
+      ),
       body: Column(
         children: [
-          // Breadcrumb bar
-          if (_breadcrumbs.isNotEmpty)
+          if (_searching)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              child: SearchBar(
+                controller: _searchCtrl,
+                hintText: 'Search files…',
+                leading: const Icon(Icons.search),
+                onChanged: (v) => setState(() => _searchQuery = v),
+                autoFocus: true,
+                padding: const WidgetStatePropertyAll(
+                  EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                ),
+              ),
+            ),
+          if (_breadcrumbs.isNotEmpty && !_searching)
             Container(
               color: cs.surfaceContainer,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
                   children: [
                     InkWell(
-                      onTap: () {
-                        setState(() {
-                          _breadcrumbs.clear();
-                          _currentPath = '';
-                        });
-                      },
+                      onTap: () => setState(() {
+                        _breadcrumbs.clear();
+                        _currentPath = '';
+                      }),
                       child: Text('root',
                           style: tt.bodySmall?.copyWith(color: cs.primary)),
                     ),
                     ..._breadcrumbs.map((crumb) {
-                      final label = crumb.contains('/')
-                          ? crumb.split('/').last
-                          : crumb;
+                      final label =
+                          crumb.contains('/') ? crumb.split('/').last : crumb;
                       final isLast = crumb == _breadcrumbs.last;
                       return Row(
                         mainAxisSize: MainAxisSize.min,
@@ -126,23 +371,19 @@ class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
                             onTap: isLast
                                 ? null
                                 : () {
-                                    final idx =
-                                        _breadcrumbs.indexOf(crumb);
+                                    final idx = _breadcrumbs.indexOf(crumb);
                                     setState(() {
-                                      _breadcrumbs
-                                          .removeRange(idx + 1, _breadcrumbs.length);
+                                      _breadcrumbs.removeRange(
+                                          idx + 1, _breadcrumbs.length);
                                       _currentPath = crumb;
                                     });
                                   },
                             child: Text(
                               label,
                               style: tt.bodySmall?.copyWith(
-                                color: isLast
-                                    ? cs.onSurface
-                                    : cs.primary,
-                                fontWeight: isLast
-                                    ? FontWeight.w600
-                                    : null,
+                                color: isLast ? cs.onSurface : cs.primary,
+                                fontWeight:
+                                    isLast ? FontWeight.w600 : null,
                               ),
                             ),
                           ),
@@ -153,83 +394,111 @@ class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
                 ),
               ),
             ),
-          Expanded(
-            child: filesAsync.when(
-              loading: () => const ShimmerList(count: 8),
-              error: (e, _) => Center(
+          if (_searching && _searchQuery.length < 2)
+            Expanded(
+              child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.error_outline, color: cs.error, size: 48),
+                    Icon(Icons.search, size: 48, color: cs.outlineVariant),
                     const SizedBox(height: 12),
-                    Text(
-                      ApiClient.extractError(e),
-                      style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 16),
-                    FilledButton.icon(
-                      onPressed: () =>
-                          ref.invalidate(_fileListProvider(_currentPath)),
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
+                    Text('Type at least 2 characters to search',
+                        style: tt.bodyMedium
+                            ?.copyWith(color: cs.onSurfaceVariant)),
                   ],
                 ),
               ),
-              data: (items) {
-                if (items.isEmpty) {
-                  return Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.folder_open_outlined,
-                            size: 48, color: cs.outlineVariant),
-                        const SizedBox(height: 12),
-                        Text('Empty directory',
+            )
+          else
+            Expanded(
+              child: listAsync.when(
+                loading: () => const ShimmerList(count: 8),
+                error: (e, _) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline, color: cs.error, size: 48),
+                      const SizedBox(height: 12),
+                      Text(
+                        ApiClient.extractError(e),
+                        style: tt.bodyMedium
+                            ?.copyWith(color: cs.onSurfaceVariant),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 16),
+                      FilledButton.icon(
+                        onPressed: () =>
+                            ref.invalidate(_fileListProvider(_currentPath)),
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                      ),
+                    ],
+                  ),
+                ),
+                data: (items) {
+                  if (items.isEmpty) {
+                    return Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _searching
+                                ? Icons.search_off
+                                : Icons.folder_open_outlined,
+                            size: 48,
+                            color: cs.outlineVariant,
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            _searching
+                                ? 'No files found for "$_searchQuery"'
+                                : 'Empty directory',
                             style: tt.bodyMedium
-                                ?.copyWith(color: cs.onSurfaceVariant)),
-                      ],
+                                ?.copyWith(color: cs.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    );
+                  }
+
+                  final sorted = [...items]..sort((a, b) {
+                      if (a.isDir && !b.isDir) return -1;
+                      if (!a.isDir && b.isDir) return 1;
+                      return a.name.compareTo(b.name);
+                    });
+
+                  return RefreshIndicator(
+                    onRefresh: () async =>
+                        ref.invalidate(_fileListProvider(_currentPath)),
+                    child: ListView.separated(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 80),
+                      itemCount: sorted.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 4),
+                      itemBuilder: (context, i) {
+                        final node = sorted[i];
+                        return _FileListTile(
+                          node: node,
+                          onNavigate:
+                              node.isDir ? () => _navigate(node.path) : null,
+                          onViewFile: !node.isDir
+                              ? () => _viewFile(context, node)
+                              : null,
+                          onLongPress: () =>
+                              _showContextMenu(context, node),
+                        );
+                      },
                     ),
                   );
-                }
-
-                // Sort: directories first, then files alphabetically
-                final sorted = [...items]..sort((a, b) {
-                    if (a.isDir && !b.isDir) return -1;
-                    if (!a.isDir && b.isDir) return 1;
-                    return a.name.compareTo(b.name);
-                  });
-
-                return RefreshIndicator(
-                  onRefresh: () async =>
-                      ref.invalidate(_fileListProvider(_currentPath)),
-                  child: ListView.separated(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: sorted.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 4),
-                    itemBuilder: (context, i) {
-                      final node = sorted[i];
-                      return _FileListTile(
-                        node: node,
-                        onNavigate: node.isDir ? () => _navigate(node.path) : null,
-                        onViewFile: !node.isDir
-                            ? () => _viewFile(context, node)
-                            : null,
-                      );
-                    },
-                  ),
-                );
-              },
+                },
+              ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  Future<void> _viewFile(BuildContext context, _FileNode node) async {
-    showModalBottomSheet(
+  Future<void> _viewFile(BuildContext context, _FileNode node) {
+    return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
@@ -240,15 +509,124 @@ class _FileBrowserScreenState extends ConsumerState<FileBrowserScreen> {
   }
 }
 
+class _FileContextMenu extends StatelessWidget {
+  final _FileNode node;
+  final VoidCallback? onView;
+  final VoidCallback? onDownload;
+  final VoidCallback? onDownloadZip;
+  final VoidCallback? onRename;
+  final VoidCallback? onDelete;
+
+  const _FileContextMenu({
+    required this.node,
+    this.onView,
+    this.onDownload,
+    this.onDownloadZip,
+    this.onRename,
+    this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.outlineVariant,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    node.isDir ? Icons.folder : Icons.insert_drive_file,
+                    color: node.isDir ? AppColors.warning : cs.primary,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(node.name,
+                        style: tt.titleSmall,
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(),
+            if (onView != null)
+              ListTile(
+                leading: const Icon(Icons.visibility_outlined),
+                title: const Text('View'),
+                onTap: () {
+                  Navigator.pop(context);
+                  onView!();
+                },
+              ),
+            if (onDownload != null)
+              ListTile(
+                leading: const Icon(Icons.download_outlined),
+                title: const Text('Download'),
+                onTap: () {
+                  Navigator.pop(context);
+                  onDownload!();
+                },
+              ),
+            if (onDownloadZip != null)
+              ListTile(
+                leading: const Icon(Icons.folder_zip_outlined),
+                title: const Text('Download as ZIP'),
+                onTap: () {
+                  Navigator.pop(context);
+                  onDownloadZip!();
+                },
+              ),
+            if (onRename != null)
+              ListTile(
+                leading: const Icon(Icons.drive_file_rename_outline),
+                title: const Text('Rename'),
+                onTap: () {
+                  Navigator.pop(context);
+                  onRename!();
+                },
+              ),
+            if (onDelete != null)
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: cs.error),
+                title: Text('Delete', style: TextStyle(color: cs.error)),
+                onTap: () {
+                  Navigator.pop(context);
+                  onDelete!();
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _FileListTile extends StatelessWidget {
   final _FileNode node;
   final VoidCallback? onNavigate;
   final VoidCallback? onViewFile;
+  final VoidCallback? onLongPress;
 
   const _FileListTile({
     required this.node,
     this.onNavigate,
     this.onViewFile,
+    this.onLongPress,
   });
 
   IconData get _icon {
@@ -313,6 +691,7 @@ class _FileListTile extends StatelessWidget {
             : Icon(Icons.visibility_outlined,
                 color: cs.onSurfaceVariant, size: 18),
         onTap: onNavigate ?? onViewFile,
+        onLongPress: onLongPress,
       ),
     );
   }
@@ -374,7 +753,8 @@ class _FileViewSheet extends StatelessWidget {
                   return Center(
                     child: Text(
                       ApiClient.extractError(snap.error!),
-                      style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                      style: tt.bodyMedium
+                          ?.copyWith(color: cs.onSurfaceVariant),
                     ),
                   );
                 }

@@ -26,6 +26,9 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
   String? _error;
   final List<String> _logs = [];
   DateTime? _startTime;
+  int? _elapsedS;
+  double? _cpuPercent;
+  double? _memoryMb;
 
   @override
   void initState() {
@@ -40,9 +43,7 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
   }
 
   Future<void> _fetchThenConnect() async {
-    // Initial HTTP fetch for immediate display
     await _fetchStatus();
-    // Then open WebSocket for live updates
     await _connectWs();
   }
 
@@ -83,26 +84,38 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
         (data) {
           if (!mounted) return;
           try {
-            final json = jsonDecode(data as String);
-            final update = BacktestRun.fromJson(Map<String, dynamic>.from(json));
-            final logMsg = json['message']?.toString() ??
-                json['log']?.toString() ??
-                'Status: ${update.status}';
+            final json = jsonDecode(data as String) as Map<String, dynamic>;
+            final update = BacktestRun.fromJson(json);
+
+            // Extract resource telemetry from WS message
+            final elapsedS = json['elapsed_s'] as int?;
+            final resources = json['resources'] as Map?;
+            final cpu = (resources?['cpu_percent'] as num?)?.toDouble();
+            final mem = (resources?['memory_mb'] as num?)?.toDouble();
+
+            // Build a meaningful log entry
+            final logParts = <String>['Status: ${update.status}'];
+            if (elapsedS != null) logParts.add('${elapsedS}s elapsed');
+            if (cpu != null) logParts.add('CPU ${cpu.toStringAsFixed(1)}%');
+
             setState(() {
               _run = update;
-              _logs.add('${_timestamp()} $logMsg');
-              if (_logs.length > 30) _logs.removeAt(0);
+              if (elapsedS != null) _elapsedS = elapsedS;
+              if (cpu != null) _cpuPercent = cpu;
+              if (mem != null) _memoryMb = mem;
               if (update.startedAt != null && _startTime == null) {
                 _startTime = DateTime.tryParse(update.startedAt!);
               }
+              _logs.add('${_timestamp()} ${logParts.join(' · ')}');
+              if (_logs.length > 30) _logs.removeAt(0);
             });
+
             if (update.status == 'done' ||
                 update.status == 'failed' ||
                 update.status == 'cancelled') {
               _channel?.sink.close();
             }
           } catch (_) {
-            // Non-JSON message — treat as plain log
             if (mounted) {
               setState(() {
                 _logs.add('${_timestamp()} $data');
@@ -112,7 +125,6 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
           }
         },
         onDone: () {
-          // WS closed — refresh status via HTTP for final state
           if (mounted &&
               _run?.status != 'done' &&
               _run?.status != 'failed' &&
@@ -121,21 +133,28 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
           }
         },
         onError: (_) {
-          // WS error — fall back to polling once
           if (mounted) _fetchStatus();
         },
       );
     } catch (_) {
-      // WS unavailable — app still works via the initial HTTP fetch
+      // WS unavailable — HTTP result suffices
     }
   }
 
   String _timestamp() {
     final now = DateTime.now();
-    return '[${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}]';
+    return '[${now.hour.toString().padLeft(2, '0')}:'
+        '${now.minute.toString().padLeft(2, '0')}:'
+        '${now.second.toString().padLeft(2, '0')}]';
   }
 
   String _elapsed() {
+    // Prefer server-provided elapsed over wall-clock calculation
+    if (_elapsedS != null) {
+      final m = _elapsedS! ~/ 60;
+      final s = _elapsedS! % 60;
+      return m > 0 ? '${m}m ${s}s' : '${s}s';
+    }
     if (_startTime == null) return '';
     final diff = DateTime.now().difference(_startTime!);
     if (diff.inHours > 0) return '${diff.inHours}h ${diff.inMinutes % 60}m';
@@ -145,7 +164,8 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
 
   Future<void> _cancel() async {
     try {
-      await ApiClient.instance.delete<dynamic>('/backtest/${widget.runId}/cancel');
+      await ApiClient.instance
+          .delete<dynamic>('/backtest/${widget.runId}/cancel');
       _fetchStatus();
     } catch (e) {
       if (mounted) {
@@ -199,8 +219,10 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final isDone = run.status == 'done';
-    final isFailed = run.status == 'failed' || run.status == 'cancelled';
-    final isRunning = run.status == 'running' || run.status == 'pending';
+    final isFailed =
+        run.status == 'failed' || run.status == 'cancelled';
+    final isRunning =
+        run.status == 'running' || run.status == 'pending';
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -223,7 +245,8 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
                           const Duration(seconds: 1), (i) => i),
                       builder: (_, __) => Text(
                         _elapsed(),
-                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        style: tt.bodySmall
+                            ?.copyWith(color: cs.onSurfaceVariant),
                       ),
                     ),
                   ],
@@ -238,6 +261,38 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
                           AlwaysStoppedAnimation<Color>(cs.primary),
                       minHeight: 3,
                     ),
+                  ),
+                ],
+                // Live resource telemetry
+                if (isRunning &&
+                    (_cpuPercent != null || _memoryMb != null)) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      if (_cpuPercent != null)
+                        Expanded(
+                          child: _ResourceMini(
+                            label: 'CPU',
+                            value: '${_cpuPercent!.toStringAsFixed(1)}%',
+                            icon: Icons.memory,
+                            color: _cpuPercent! > 80
+                                ? cs.error
+                                : AppColors.success,
+                          ),
+                        ),
+                      if (_cpuPercent != null && _memoryMb != null)
+                        const SizedBox(width: 8),
+                      if (_memoryMb != null)
+                        Expanded(
+                          child: _ResourceMini(
+                            label: 'RAM',
+                            value:
+                                '${(_memoryMb! / 1024).toStringAsFixed(1)} GB',
+                            icon: Icons.storage,
+                            color: cs.secondary,
+                          ),
+                        ),
+                    ],
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -317,8 +372,8 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
           OutlinedButton.icon(
             onPressed: _cancel,
             icon: Icon(Icons.stop, color: cs.error),
-            label: Text('Cancel Backtest',
-                style: TextStyle(color: cs.error)),
+            label:
+                Text('Cancel Backtest', style: TextStyle(color: cs.error)),
             style: OutlinedButton.styleFrom(
               side: BorderSide(color: cs.error),
               padding: const EdgeInsets.symmetric(vertical: 14),
@@ -344,6 +399,50 @@ class _BacktestMonitorScreenState extends ConsumerState<BacktestMonitorScreen> {
   }
 }
 
+class _ResourceMini extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  const _ResourceMini({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withAlpha(20),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withAlpha(60)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label,
+                  style: tt.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant, fontSize: 9)),
+              Text(value,
+                  style: tt.labelSmall?.copyWith(
+                      color: color, fontWeight: FontWeight.w700)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _InfoRow extends StatelessWidget {
   final String label;
   final String value;
@@ -359,12 +458,14 @@ class _InfoRow extends StatelessWidget {
         SizedBox(
           width: 80,
           child: Text(label,
-              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
+              style:
+                  tt.bodySmall?.copyWith(color: cs.onSurfaceVariant)),
         ),
         Expanded(
             child: Text(value,
                 style: tt.bodySmall?.copyWith(
-                    color: cs.onSurface, fontWeight: FontWeight.w500))),
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w500))),
       ]),
     );
   }

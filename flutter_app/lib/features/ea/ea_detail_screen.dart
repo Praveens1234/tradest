@@ -4,6 +4,7 @@ import '../../core/api_client.dart';
 import '../../core/app_colors.dart';
 import '../../shared/models/ea_model.dart';
 import '../../shared/widgets/app_scaffold.dart';
+import 'compile_log_sheet.dart';
 import 'ea_provider.dart';
 
 final _eaDetailProvider = FutureProvider.family.autoDispose<EAModel, int>((ref, id) async {
@@ -58,38 +59,22 @@ class _EADetailScreenState extends ConsumerState<EADetailScreen> {
     }
   }
 
-  Future<void> _compile(BuildContext context, int id, String name) async {
-    final cs = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Compiling...')),
+  void _compile(BuildContext context, int id, String name) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      isDismissible: false,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => DraggableScrollableSheet(
+        initialChildSize: 0.65,
+        minChildSize: 0.4,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (_, __) => CompileLogSheet(eaId: id, eaName: name),
+      ),
     );
-    try {
-      final result = await ref.read(eaOperationsProvider.notifier).compileEA(id);
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (_) => DraggableScrollableSheet(
-          initialChildSize: 0.5,
-          minChildSize: 0.3,
-          maxChildSize: 0.9,
-          expand: false,
-          builder: (_, controller) =>
-              _CompileResultSheet(eaName: name, result: result, scrollController: controller),
-        ),
-      );
-    } catch (e) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).clearSnackBars();
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('Compile error: ${ApiClient.extractError(e)}'),
-        backgroundColor: cs.errorContainer,
-      ));
-    }
   }
 
   @override
@@ -97,7 +82,6 @@ class _EADetailScreenState extends ConsumerState<EADetailScreen> {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
     final eaAsync = ref.watch(_eaDetailProvider(widget.eaId));
-    final ops = ref.watch(eaOperationsProvider);
 
     return eaAsync.when(
       loading: () => AppScaffold(
@@ -152,16 +136,9 @@ class _EADetailScreenState extends ConsumerState<EADetailScreen> {
                     ])
             else ...[
               IconButton(
-                icon: ops.isLoading
-                    ? SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: cs.primary))
-                    : const Icon(Icons.build_outlined),
+                icon: const Icon(Icons.build_outlined),
                 tooltip: 'Compile',
-                onPressed: ops.isLoading
-                    ? null
-                    : () => _compile(context, ea.id, ea.name),
+                onPressed: () => _compile(context, ea.id, ea.name),
               ),
               IconButton(
                 icon: const Icon(Icons.edit_outlined),
