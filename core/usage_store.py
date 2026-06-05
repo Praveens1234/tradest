@@ -41,6 +41,13 @@ async def get_events(
     stmt = select(UsageEvent).order_by(UsageEvent.timestamp.desc())
     if action_filter:
         stmt = stmt.where(UsageEvent.action == action_filter)
+    if date_filter:
+        try:
+            from datetime import datetime
+            dt = datetime.fromisoformat(date_filter)
+            stmt = stmt.where(UsageEvent.timestamp >= dt)
+        except ValueError:
+            pass
     stmt = stmt.limit(limit)
     result = await db.execute(stmt)
     return list(result.scalars().all())

@@ -1,6 +1,5 @@
 """Parse MT5 HTML and XML backtest reports into metrics + trades."""
 import re
-import csv
 import pathlib
 import logging
 from xml.etree import ElementTree as ET
@@ -9,29 +8,42 @@ from bs4 import BeautifulSoup
 logger = logging.getLogger(__name__)
 
 
-def parse_html_report(html_path: str) -> dict:
-    """Parse MT5 HTML report. Returns {metrics: dict, trades: list[dict]}."""
-    try:
-        content = pathlib.Path(html_path).read_text(encoding="utf-16-le", errors="replace")
-    except UnicodeDecodeError:
-        content = pathlib.Path(html_path).read_text(encoding="utf-8", errors="replace")
+def _read_html_file(path: str) -> str:
+    """Read an MT5 HTML/HTM report; tries several encodings."""
+    p = pathlib.Path(path)
+    # MT5 writes UTF-16-LE by default on some builds, UTF-8 on others
+    for enc in ("utf-16-le", "utf-8-sig", "utf-8", "utf-16", "latin-1"):
+        try:
+            return p.read_text(encoding=enc, errors="strict")
+        except (UnicodeDecodeError, UnicodeError):
+            continue
+    return p.read_text(encoding="utf-8", errors="replace")
 
-    soup = BeautifulSoup(content, "lxml")
-    metrics = _extract_metrics(soup)
-    trades = _extract_trades(soup)
-    return {"metrics": metrics, "trades": trades}
+
+def parse_html_report(html_path: str) -> dict:
+    """Parse MT5 HTML/HTM report. Returns {metrics: dict, trades: list[dict]}."""
+    try:
+        content = _read_html_file(html_path)
+        soup    = BeautifulSoup(content, "lxml")
+        metrics = _extract_metrics(soup)
+        trades  = _extract_trades(soup)
+        return {"metrics": metrics, "trades": trades}
+    except Exception as exc:
+        logger.error("Failed to parse HTML report %s: %s", html_path, exc)
+        return {"metrics": {}, "trades": []}
 
 
 def parse_xml_report(xml_path: str) -> dict:
     """Parse MT5 Open XML (Excel 2007) report."""
+    if not xml_path or not pathlib.Path(xml_path).exists():
+        return {"metrics": {}, "trades": []}
     try:
         tree = ET.parse(xml_path)
         root = tree.getroot()
     except ET.ParseError as exc:
-        logger.error("XML parse error: %s", exc)
+        logger.error("XML parse error for %s: %s", xml_path, exc)
         return {"metrics": {}, "trades": []}
 
-    # MT5 XML has two sheets: Summary and Trades
     ns = {"ss": "urn:schemas-microsoft-com:office:spreadsheet"}
     metrics: dict = {}
     trades: list[dict] = []
@@ -39,7 +51,7 @@ def parse_xml_report(xml_path: str) -> dict:
     worksheets = root.findall(".//ss:Worksheet", ns)
     for ws in worksheets:
         name_attr = ws.get("{urn:schemas-microsoft-com:office:spreadsheet}Name", "")
-        rows = ws.findall(".//ss:Row", ns)
+        rows      = ws.findall(".//ss:Row", ns)
         if "summary" in name_attr.lower() or len(worksheets) == 1:
             for row in rows:
                 cells = row.findall("ss:Cell/ss:Data", ns)
@@ -63,10 +75,8 @@ def parse_xml_report(xml_path: str) -> dict:
 
 def _extract_metrics(soup: BeautifulSoup) -> dict:
     metrics: dict = {}
-    tables = soup.find_all("table")
-    for table in tables:
-        rows = table.find_all("tr")
-        for row in rows:
+    for table in soup.find_all("table"):
+        for row in table.find_all("tr"):
             cells = row.find_all(["td", "th"])
             if len(cells) >= 2:
                 key = cells[0].get_text(strip=True)
@@ -78,8 +88,7 @@ def _extract_metrics(soup: BeautifulSoup) -> dict:
 
 def _extract_trades(soup: BeautifulSoup) -> list[dict]:
     trades: list[dict] = []
-    tables = soup.find_all("table")
-    for table in tables:
+    for table in soup.find_all("table"):
         rows = table.find_all("tr")
         if len(rows) < 3:
             continue

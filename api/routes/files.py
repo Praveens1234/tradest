@@ -48,6 +48,10 @@ async def list_dir(path: str = ""):
 
 @router.get("/read", dependencies=[Depends(require_auth)])
 async def read_file(path: str = Query(...)):
+    from core.file_manager.fs_operations import _BINARY_EXTENSIONS
+    import pathlib
+    if pathlib.Path(path).suffix.lower() in _BINARY_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Binary file cannot be read as text: {pathlib.Path(path).name}")
     try:
         content = fs_operations.read_file(path)
         return {"path": path, "content": content}
@@ -222,5 +226,6 @@ async def compile_by_path(path: str, db: AsyncSession = Depends(get_db)):
         "status": result.status,
         "errors": [e.__dict__ for e in result.errors],
         "warnings": [w.__dict__ for w in result.warnings],
+        "raw_log": result.raw_log,
         "compiled_at": result.compiled_at,
     }

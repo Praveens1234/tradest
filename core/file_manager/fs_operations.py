@@ -21,8 +21,19 @@ def _trash_dir() -> pathlib.Path:
     return trash
 
 
+_BINARY_EXTENSIONS = {
+    ".ex5", ".ex4", ".dll", ".exe", ".so", ".bin",
+    ".zip", ".gz", ".tar", ".rar", ".7z",
+    ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx",
+    ".mp3", ".mp4", ".avi", ".mov", ".db", ".sqlite",
+}
+
+
 def read_file(path: str) -> str:
     target = _safe_resolve(path, _root())
+    if target.suffix.lower() in _BINARY_EXTENSIONS:
+        raise ValueError(f"Binary file cannot be read as text: {target.name}")
     return target.read_text(encoding="utf-8", errors="replace")
 
 

@@ -1,12 +1,12 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FolderOpen, PlayCircle, BarChart2, Settings } from 'lucide-react'
+import { LayoutDashboard, FolderOpen, PlayCircle, ScrollText, Settings } from 'lucide-react'
 
 const links = [
   { to: '/dashboard',      icon: LayoutDashboard, label: 'Home' },
-  { to: '/files',          icon: FolderOpen,       label: 'Files' },
-  { to: '/backtest/setup', icon: PlayCircle,       label: 'Backtest' },
-  { to: '/results',        icon: BarChart2,        label: 'Results' },
-  { to: '/settings',       icon: Settings,         label: 'Settings' },
+  { to: '/files',          icon: FolderOpen,      label: 'Files' },
+  { to: '/backtest/setup', icon: PlayCircle,      label: 'Backtest' },
+  { to: '/logs',           icon: ScrollText,      label: 'Logs' },
+  { to: '/settings',       icon: Settings,        label: 'Settings' },
 ]
 
 export default function BottomNav() {

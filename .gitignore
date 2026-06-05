@@ -44,8 +44,8 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Built frontend
-web_ui_dist/
+# Built frontend (committed so users without Node.js get the Web UI out of the box)
+# web_ui_dist/
 
 # IDE
 .idea/

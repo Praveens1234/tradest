@@ -89,8 +89,35 @@ async def get_ea(db: AsyncSession, ea_id: int) -> EAFile | None:
 
 
 async def list_eas(db: AsyncSession) -> list[EAFile]:
+    await _auto_sync_experts(db)
     result = await db.execute(select(EAFile).order_by(EAFile.name))
     return list(result.scalars().all())
+
+
+async def _auto_sync_experts(db: AsyncSession) -> None:
+    """Register any .mq5 files found on disk that are not yet in the DB."""
+    experts_dir = _ensure_experts_dir().resolve()   # must be absolute for relative_to() below
+    root = pathlib.Path(settings.mql5_root or settings.workspace_dir or "workspace").resolve()
+    added = False
+    for mq5_file in sorted(experts_dir.rglob("*.mq5")):
+        try:
+            rel_path = str(mq5_file.relative_to(root)).replace("\\", "/")
+        except ValueError:
+            continue
+        stmt = select(EAFile).where(EAFile.path == rel_path)
+        if not (await db.execute(stmt)).scalar_one_or_none():
+            mtime = datetime.utcfromtimestamp(mq5_file.stat().st_mtime)
+            db.add(EAFile(
+                name=mq5_file.stem,
+                path=rel_path,
+                type="mq5",
+                created_at=mtime,
+                updated_at=mtime,
+            ))
+            logger.info("Auto-registered EA from disk: %s", rel_path)
+            added = True
+    if added:
+        await db.commit()
 
 
 async def update_ea(db: AsyncSession, ea_id: int, content: str) -> EAFile | None:
