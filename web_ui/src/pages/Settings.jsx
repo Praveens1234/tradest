@@ -117,7 +117,9 @@ export default function Settings() {
           <div className="text-sm text-gray-400 space-y-2">
             <div>
               <span className="text-gray-500">REST API + Web UI:</span>{' '}
-              <code className="text-gray-200">http://&lt;host-ip&gt;:8000</code>
+              <code className="text-brand-400 select-all">
+                {`${window.location.protocol}//${window.location.hostname}:${window.location.port || '8000'}`}
+              </code>
             </div>
             <div>
               <span className="text-gray-500">MCP Server:</span>{' '}
@@ -125,8 +127,9 @@ export default function Settings() {
             </div>
           </div>
           <p className="text-xs text-gray-600">
-            The server binds to <code>0.0.0.0</code> by default, making it accessible on your LAN.
-            Ensure your firewall allows inbound TCP on port 8000.
+            Use the URL above in your mobile app settings. The server binds to{' '}
+            <code>0.0.0.0</code> by default, making it accessible on your LAN.
+            Ensure your firewall allows inbound TCP on port {window.location.port || '8000'}.
           </p>
         </div>
       )}

@@ -64,7 +64,7 @@ export default function History() {
                   )}
                   {r.started_at && (
                     <span className="text-gray-600 text-xs ml-auto">
-                      {new Date(r.started_at).toLocaleString()}
+                      {new Date(r.started_at.replace(' ', 'T') + 'Z').toLocaleString()}
                     </span>
                   )}
                 </div>

@@ -96,7 +96,7 @@ async def list_eas(db: AsyncSession) -> list[EAFile]:
 
 async def _auto_sync_experts(db: AsyncSession) -> None:
     """Register any .mq5 files found on disk that are not yet in the DB."""
-    experts_dir = _ensure_experts_dir()
+    experts_dir = _ensure_experts_dir().resolve()   # must be absolute for relative_to() below
     root = pathlib.Path(settings.mql5_root or settings.workspace_dir or "workspace").resolve()
     added = False
     for mq5_file in sorted(experts_dir.rglob("*.mq5")):
